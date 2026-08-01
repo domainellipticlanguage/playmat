@@ -87,17 +87,20 @@ describe('seq guards', () => {
 });
 
 describe('deck import + setup', () => {
-  it('imports 100 cards, commanders to command zone, library shuffled', () => {
+  it('imports 100 cards, commanders to command zone, opening 7 dealt', () => {
     const pool = mkPool(100);
     pool[0].commander = true;
     actions.importDeck(pool);
     const s = useGame.getState();
     expect(Object.keys(s.pool)).toHaveLength(100);
-    expect(s.hidden.library).toHaveLength(99);
+    expect(s.hidden.library).toHaveLength(92);
+    expect(s.hidden.hand).toHaveLength(7);
     expect(s.hidden.library).not.toContain('c0');
+    expect(s.hidden.hand).not.toContain('c0');
     expect(s.cards['c0']?.zone).toBe('command');
     expect(s.playerStates[ME].life).toBe(40);
-    expect(s.playerStates[ME].libraryCount).toBe(99);
+    expect(s.playerStates[ME].libraryCount).toBe(92);
+    expect(s.playerStates[ME].handCount).toBe(7);
     expect(s.room?.gameId).toBeTruthy();
     expect(s.setupGameId).toBe(s.room?.gameId);
   });
@@ -110,7 +113,22 @@ describe('deck import + setup', () => {
     expect(s.room?.gameId).not.toBe(g1); // re-import bumps the game
     const mine = Object.values(s.pool).filter((p) => p.ownerId === ME);
     expect(mine.map((p) => p.guid).sort()).toEqual(['nc0', 'nc1', 'nc2', 'nc3', 'nc4']);
-    expect(s.hidden.library).toHaveLength(5);
+    // 5-card deck: all 5 dealt into the opening hand, library empty.
+    expect(s.hidden.hand).toHaveLength(5);
+    expect(s.hidden.library).toHaveLength(0);
+  });
+
+  it('mulligan shuffles the hand back and draws 7 again', () => {
+    actions.importDeck(mkPool(20)); // 13 library / 7 hand
+    const before = useGame.getState();
+    const all = [...before.hidden.library, ...before.hidden.hand].sort();
+    actions.mulligan();
+    const s = useGame.getState();
+    expect(s.hidden.hand).toHaveLength(7);
+    expect(s.hidden.library).toHaveLength(13);
+    expect([...s.hidden.library, ...s.hidden.hand].sort()).toEqual(all);
+    expect(s.playerStates[ME].handCount).toBe(7);
+    expect(s.playerStates[ME].libraryCount).toBe(13);
   });
 
   it('stale pool chunks from an older import are ignored', () => {
@@ -130,13 +148,15 @@ describe('hidden-zone bookkeeping', () => {
   beforeEach(() => actions.importDeck(mkPool(20)));
 
   it('draw moves top cards to hand and publishes counts only', () => {
-    const top = useGame.getState().hidden.library.slice(0, 7);
+    const st0 = useGame.getState();
+    const openingHand = st0.hidden.hand; // 7 dealt at setup
+    const top = st0.hidden.library.slice(0, 3);
     published.length = 0;
-    actions.drawCards(7);
+    actions.drawCards(3);
     const s = useGame.getState();
-    expect(s.hidden.hand).toEqual(top);
-    expect(s.hidden.library).toHaveLength(13);
-    expect(s.playerStates[ME].handCount).toBe(7);
+    expect(s.hidden.hand).toEqual([...openingHand, ...top]);
+    expect(s.hidden.library).toHaveLength(10);
+    expect(s.playerStates[ME].handCount).toBe(10);
     // No card identities leak: only player + log events.
     expect(published.filter((e) => e.t === 'card')).toHaveLength(0);
   });
@@ -211,8 +231,8 @@ describe('game state', () => {
     expect(s.setupGameId).toBe(g1); // not yet re-run here (no connection layer in test)
     actions.runNewGameSetup(s.room!.gameId);
     const s2 = useGame.getState();
-    expect(s2.hidden.library).toHaveLength(10);
-    expect(s2.hidden.hand).toHaveLength(0);
+    expect(s2.hidden.library).toHaveLength(3);
+    expect(s2.hidden.hand).toHaveLength(7);
     expect(s2.playerStates[ME].life).toBe(40);
   });
 });

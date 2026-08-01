@@ -519,8 +519,11 @@ export function runNewGameSetup(gameId: string): void {
   s.markSetupDone(gameId);
 
   const commanders = mine.filter((p) => p.commander);
-  const library = shuffled(mine.filter((p) => !p.commander).map((p) => p.guid));
-  s.setHidden(library, []);
+  const shuffledDeck = shuffled(mine.filter((p) => !p.commander).map((p) => p.guid));
+  // Deal the opening hand automatically (Archidekt playtester behavior).
+  const hand = shuffledDeck.slice(0, 7);
+  const library = shuffledDeck.slice(7);
+  s.setHidden(library, hand);
 
   const events: StateEvent[] = [];
   commanders.forEach((c, i) => {
@@ -538,11 +541,38 @@ export function runNewGameSetup(gameId: string): void {
       life: s.prefs.defaultLife,
       counters: {},
       commanderDamage: {},
-      handCount: 0,
+      handCount: hand.length,
       libraryCount: library.length,
       topRevealed: null,
     },
   });
+  syncHandReveals(events);
   sendState(events);
   flushHidden();
+}
+
+/**
+ * Mulligan (Archidekt-style): the whole hand shuffles back in, draw 7 again.
+ * London-rule bottoming is left to the player ("to library (bottom)").
+ */
+export function mulligan(): void {
+  const { s, me, myName } = ctx();
+  const oldHand = s.hidden.hand;
+  if (oldHand.length === 0 && s.hidden.library.length === 0) return;
+  const deck = shuffled([...s.hidden.library, ...oldHand]);
+  const hand = deck.slice(0, 7);
+  s.setHidden(deck.slice(7), hand);
+
+  const events: StateEvent[] = [];
+  // Clear stale public markers (e.g. cards that were revealed from hand).
+  for (const guid of oldHand) {
+    if (s.cards[guid]) {
+      const zone = hand.includes(guid) ? 'hand' : 'library';
+      events.push(cardEvent({ ...currentCard(guid), zone, zoneOwnerId: me, revealed: false }));
+    }
+  }
+  syncHandReveals(events);
+  events.push(playerEvent(myPlayerState()));
+  events.push(logEvent({ kind: 'shuffle', text: `${myName} took a mulligan` }));
+  sendState(events);
 }

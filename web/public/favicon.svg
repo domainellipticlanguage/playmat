@@ -1,16 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- Small-size mark: three solid-color cards, near-full-bleed. The five-card
-       dark-face fan (logo.svg) doesn't survive 16px; this does. -->
-  <g transform="translate(50,86)">
-    <g transform="rotate(-24)">
-      <rect x="-21" y="-74" width="42" height="60" rx="7" fill="#c8452f" stroke="#14100c" stroke-width="5"/>
-    </g>
-    <g transform="rotate(24)">
-      <rect x="-21" y="-74" width="42" height="60" rx="7" fill="#4e9a3e" stroke="#14100c" stroke-width="5"/>
-    </g>
-    <g transform="rotate(0)">
-      <rect x="-21" y="-80" width="42" height="60" rx="7" fill="#f0e6c8" stroke="#14100c" stroke-width="5"/>
-      <circle cx="0" cy="-50" r="9" fill="#c9a34a"/>
-    </g>
+  <!-- Small-size mark: the five-card fan with solid WUBRG fills, spread wide
+       enough that every color keeps a visible sliver at 16px. -->
+  <g transform="translate(50,84)">
+    <g transform="rotate(-52)"><rect x="-20" y="-76" width="40" height="58" rx="8" fill="#e4ddc4" stroke="#14100c" stroke-width="4"/></g>
+    <g transform="rotate(-26)"><rect x="-20" y="-83" width="40" height="58" rx="8" fill="#5f8dc9" stroke="#14100c" stroke-width="4"/></g>
+    <g transform="rotate(52)"><rect x="-20" y="-76" width="40" height="58" rx="8" fill="#5d8a4e" stroke="#14100c" stroke-width="4"/></g>
+    <g transform="rotate(26)"><rect x="-20" y="-83" width="40" height="58" rx="8" fill="#c8452f" stroke="#14100c" stroke-width="4"/></g>
+    <g transform="rotate(0)"><rect x="-20" y="-86" width="40" height="58" rx="8" fill="#8f86a8" stroke="#14100c" stroke-width="4"/></g>
   </g>
 </svg>

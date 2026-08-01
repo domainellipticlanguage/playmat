@@ -87,6 +87,14 @@ export function Table() {
             <button className="small" disabled={!iHaveDeck} onClick={() => actions.drawCards(1)} title="Draw (D)">
               Draw
             </button>
+            <button
+              className="small"
+              disabled={!iHaveDeck}
+              onClick={() => actions.mulligan()}
+              title="Shuffle your hand back and draw 7 (bottom cards yourself, London-style)"
+            >
+              Mulligan
+            </button>
             <button className="small" disabled={!iHaveDeck} onClick={() => actions.untapAll()} title="Untap all (U)">
               Untap all
             </button>

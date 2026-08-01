@@ -175,6 +175,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
       items: [
         { label: 'Draw 1  (D)', action: () => actions.drawCards(1) },
         { label: 'Draw 7', action: () => actions.drawCards(7) },
+        { label: 'Mulligan (hand back, draw 7)', action: () => actions.mulligan() },
         { label: 'Shuffle', action: () => actions.shuffleLibrary() },
         { sep: true, label: '' },
         { label: 'Scry / look at top…', action: () => {

@@ -159,7 +159,7 @@ export function Battlefield() {
 
     if (panRef.current) {
       const p = panRef.current;
-      setView((v) => ({ ...v, cx: p.cx + (local.x - p.startX), cy: p.cy + (local.y - p.startY) }));
+      setView((v) => clampView({ ...v, cx: p.cx + (local.x - p.startX), cy: p.cy + (local.y - p.startY) }));
       return;
     }
 
@@ -238,16 +238,34 @@ export function Battlefield() {
     }
   };
 
+  /** Keep the table from being flung entirely off-screen. */
+  const clampView = (v: ViewTransform): ViewTransform => {
+    const el = viewportRef.current;
+    if (!el) return v;
+    const r = el.getBoundingClientRect();
+    const reach = (TABLE / 2) * v.k + 40;
+    return {
+      ...v,
+      cx: Math.min(r.width / 2 + reach, Math.max(r.width / 2 - reach, v.cx)),
+      cy: Math.min(r.height / 2 + reach, Math.max(r.height / 2 - reach, v.cy)),
+    };
+  };
+
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    const local = toLocal(e);
-    const factor = Math.exp(-e.deltaY * 0.0012);
-    setView((v) => {
-      const k = Math.min(1.4, Math.max(0.08, v.k * factor));
-      // Zoom toward the cursor: keep the world point under it fixed.
-      const scale = k / v.k;
-      return { ...v, k, cx: local.x - (local.x - v.cx) * scale, cy: local.y - (local.y - v.cy) * scale };
-    });
+    if (e.ctrlKey || e.metaKey) {
+      // Pinch (arrives as ctrl+wheel) or ⌘/Ctrl+wheel: zoom toward the cursor.
+      const local = toLocal(e);
+      const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0012));
+      setView((v) => {
+        const k = Math.min(1.4, Math.max(0.08, v.k * factor));
+        const scale = k / v.k;
+        return clampView({ ...v, k, cx: local.x - (local.x - v.cx) * scale, cy: local.y - (local.y - v.cy) * scale });
+      });
+    } else {
+      // Two-finger scroll / plain wheel: pan.
+      setView((v) => clampView({ ...v, cx: v.cx - e.deltaX, cy: v.cy - e.deltaY }));
+    }
   };
 
   const faceAngleOverride = prefs.faceOpponentCards ? seatAngle(mySeat) : null;
@@ -317,7 +335,8 @@ export function Battlefield() {
         />
       )}
       <div className="help-hint">
-        click: tap · drag: move · shift-click: multi-select · drag empty: box select · alt-drag: pan · wheel: zoom
+        click: tap · drag: move · shift-click: multi-select · drag empty: box select · scroll: pan ·
+        pinch or ⌘-wheel: zoom · alt-drag: pan
       </div>
     </div>
   );
