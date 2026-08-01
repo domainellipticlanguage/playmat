@@ -401,8 +401,19 @@ function ImportModal({ onClose }: { onClose: () => void }) {
   const [problems, setProblems] = useState<string[]>([]);
   const [pending, setPending] = useState<PoolCard[] | null>(null);
   const [commanderPick, setCommanderPick] = useState<string | null>(null);
+  const [deckName, setDeckName] = useState<string | null>(null);
+  const [savedDecks, setSavedDecks] = useState(() => persisted.listDecks());
 
   const me = session?.playerId ?? '';
+
+  /** One-click import of a saved deck: fresh guids, no Scryfall/Archidekt. */
+  const importSaved = (deckId: string) => {
+    const deck = savedDecks.find((d) => d.id === deckId);
+    if (!deck) return;
+    actions.importDeck(deck.cards.map((c) => ({ ...c, guid: newGuid(), ownerId: me })));
+    persisted.saveDeck(deck.name, deck.cards.map((c) => ({ ...c, guid: '', ownerId: '' }))); // bump recency
+    onClose();
+  };
 
   const resolveText = async () => {
     setBusy(true);
@@ -488,6 +499,10 @@ function ImportModal({ onClose }: { onClose: () => void }) {
         return c;
       });
     }
+    // Remember the deck for one-click reuse in future rooms.
+    const cmdrNames = cards.filter((c) => c.commander).map((c) => c.sf?.name).filter(Boolean);
+    const name = deckName ?? (cmdrNames[0] as string | undefined) ?? `Deck (${cards.length} cards)`;
+    persisted.saveDeck(name, cards);
     actions.importDeck(cards);
     onClose();
   };
@@ -495,6 +510,37 @@ function ImportModal({ onClose }: { onClose: () => void }) {
   return (
     <Backdrop onClose={onClose}>
       <h3>Import a deck</h3>
+      {savedDecks.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span className="subtle">Your decks (saved on this device — no re-resolving needed):</span>
+          {savedDecks.map((d) => (
+            <div key={d.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button className="primary small" onClick={() => importSaved(d.id)}>
+                Import
+              </button>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <b>{d.name}</b>{' '}
+                <span className="subtle">
+                  {d.count} cards
+                  {d.commanders.length ? ` · ${d.commanders.join(' + ')}` : ''}
+                  {` · ${new Date(d.savedAt).toLocaleDateString()}`}
+                </span>
+              </span>
+              <button
+                className="small"
+                title="Forget this deck"
+                onClick={() => {
+                  persisted.deleteDeck(d.id);
+                  setSavedDecks(persisted.listDecks());
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <div style={{ borderTop: '1px solid var(--panel-border)', margin: '4px 0' }} />
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           placeholder="Archidekt deck URL (optional)"
