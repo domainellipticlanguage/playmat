@@ -97,12 +97,14 @@ export function Battlefield() {
     sendEphemeral({ t: 'cursor', by: session.playerId, x: world.x, y: world.y, ts: Date.now() });
   };
 
-  const publishDrag = (guid: string, world: { x: number; y: number }) => {
+  const publishDrag = (guid: string, world: { x: number; y: number }, force = false) => {
     if (!session) return;
-    const minGap = 1000 / Math.max(2, prefs.cursorRate);
-    const now = performance.now();
-    if (now - lastDragSent.current < minGap) return;
-    lastDragSent.current = now;
+    if (!force) {
+      const minGap = 1000 / Math.max(2, prefs.cursorRate);
+      const now = performance.now();
+      if (now - lastDragSent.current < minGap) return;
+      lastDragSent.current = now;
+    }
     sendEphemeral({ t: 'drag', by: session.playerId, guid, x: world.x, y: world.y, ts: Date.now() });
   };
 
@@ -214,7 +216,13 @@ export function Battlefield() {
         const moves = drag.guids
           .map((g) => ({ guid: g, ...dragPositions[g] }))
           .filter((m) => Number.isFinite(m.x));
-        if (moves.length) actions.moveCardsGroup(moves);
+        if (moves.length) {
+          // E-5 for the ghost: one final unthrottled position at the exact
+          // drop point, so peers' ghosts sit where the card will land while
+          // the authoritative state event is still in flight.
+          publishDrag(drag.guids[0], dragPositions[drag.guids[0]], true);
+          actions.moveCardsGroup(moves);
+        }
       }
       if (session) sendEphemeral({ t: 'dragend', by: session.playerId, guid: drag.guids[0], ts: Date.now() });
       setDragPositions({});

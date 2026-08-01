@@ -46,6 +46,13 @@ export interface RemoteDrag {
   y: number;
   by: string;
   ts: number;
+  /**
+   * Set when the dragger released. The override is NOT removed then — the
+   * authoritative card event removes it, so the card never snaps back to its
+   * pre-drag position while that event is still in flight. endedAt is only a
+   * grace-period fallback for a dropped state event.
+   */
+  endedAt?: number;
 }
 
 interface GameStore {
@@ -168,6 +175,14 @@ export const useGame = create<GameStore>((set, get) => ({
         else cards[ev.card.guid] = ev.card;
         patch.cards = cards;
 
+        // The authoritative position has landed: retire any drag ghost so the
+        // card settles exactly once (no snap-back through the old position).
+        if (state.drags[ev.card.guid]) {
+          const drags = { ...state.drags };
+          delete drags[ev.card.guid];
+          patch.drags = drags;
+        }
+
         if (deriveLog) {
           const mover = state.players.find((p) => p.playerId === ev.by)?.name ?? 'Someone';
           const name = cardName(state.pool, ev.card.guid, ev.card.faceDown && !prev);
@@ -279,9 +294,11 @@ export const useGame = create<GameStore>((set, get) => ({
         break;
       }
       case 'dragend': {
-        const drags = { ...state.drags };
-        delete drags[ev.guid];
-        set({ drags });
+        // Keep the ghost at its last position; the card state event clears it.
+        const cur = state.drags[ev.guid];
+        if (cur) {
+          set({ drags: { ...state.drags, [ev.guid]: { ...cur, endedAt: Date.now() } } });
+        }
         break;
       }
       case 'presence':
@@ -329,7 +346,11 @@ export const useGame = create<GameStore>((set, get) => ({
     const state = get();
     const now = Date.now();
     const cursors = Object.fromEntries(Object.entries(state.cursors).filter(([, c]) => now - c.ts < 8000));
-    const drags = Object.fromEntries(Object.entries(state.drags).filter(([, d]) => now - d.ts < 5000));
+    const drags = Object.fromEntries(
+      Object.entries(state.drags).filter(
+        ([, d]) => now - d.ts < 5000 && !(d.endedAt && now - d.endedAt > 1500)
+      )
+    );
     if (
       Object.keys(cursors).length !== Object.keys(state.cursors).length ||
       Object.keys(drags).length !== Object.keys(state.drags).length
