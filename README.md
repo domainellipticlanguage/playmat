@@ -272,3 +272,4 @@ https://data.scryfall.io/oracle-cards/oracle-cards-20260731210300.jsonl.gz
 
 Bells and whistles - I think the background image for this kitchen table thing could be cool. Archideckt has a pretty mundane black background with little gridlines. We could try to do a funny Medieval/fantasy hewn stone kitchen table surface. Could also make it respect the North/South/East/West orientations as an extra flourish. Check /Users/nathandunn/Projects/big-bad-wolf-trailer/.env for a REPLICATE_API_KEY you can use for generating images.
 
+No need for a custom domain name yet.

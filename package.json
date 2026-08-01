@@ -1,0 +1,21 @@
+{
+  "name": "playmat",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A shared virtual table for paper-style Magic: The Gathering",
+  "workspaces": [
+    "shared",
+    "web",
+    "local-server",
+    "infra"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,green \"npm run dev -w local-server\" \"npm run dev -w web\"",
+    "build": "npm run build -w shared && npm run build -w web",
+    "test": "npm run test -w shared --if-present && npm run test -w local-server --if-present",
+    "deploy": "node scripts/deploy.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

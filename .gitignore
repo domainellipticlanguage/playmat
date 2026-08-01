@@ -1,0 +1,9 @@
+node_modules/
+dist/
+cdk.out/
+*.log
+.DS_Store
+infra/.jwt-key
+infra/outputs.json
+.env
+.env.*
