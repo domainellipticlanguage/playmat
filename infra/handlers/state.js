@@ -3,8 +3,8 @@
  * onPublish persists each event's subject item to the Board table
  * (last-writer-wins, TTL 72h) before broadcasting. APPSYNC_JS runtime.
  *
- * "__BOARD_TABLE__" is substituted with the real table name at synth time
- * (APPSYNC_JS has no environment variables).
+ * The TABLE placeholder below is substituted with the real table name at
+ * synth time (APPSYNC_JS has no environment variables).
  */
 import { util } from '@aws-appsync/utils';
 import * as ddb from '@aws-appsync/utils/dynamodb';
@@ -75,6 +75,11 @@ export const onPublish = {
     return ddb.batchPut({ tables: tables });
   },
   response(ctx) {
+    if (ctx.error) {
+      // Persistence failed. Still broadcast (live play beats snapshots), but
+      // log loudly — snapshots would be stale until the next write.
+      console.error('board write failed', ctx.error.type, ctx.error.message);
+    }
     const validIds = ctx.stash.validIds || [];
     return ctx.events.filter((e) => validIds.indexOf(e.id) >= 0);
   },

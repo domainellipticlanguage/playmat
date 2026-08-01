@@ -53,7 +53,13 @@ export class PlaymatStack extends Stack {
       memorySize: 256,
       timeout: Duration.seconds(5),
       environment: { JWT_KEY: props.jwtKey },
-      bundling: { minify: true, format: nodejs.OutputFormat.ESM, target: 'node22' },
+      bundling: {
+        minify: true,
+        format: nodejs.OutputFormat.ESM,
+        target: 'node22',
+        // CJS deps require() Node builtins inside the ESM bundle.
+        banner: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
+      },
     });
 
     // ---------------- Events API ----------------
@@ -71,6 +77,7 @@ export class PlaymatStack extends Stack {
 
     const api = new appsync.EventApi(this, 'Events', {
       apiName: 'playmat-events',
+      logConfig: { fieldLogLevel: appsync.AppSyncFieldLogLevel.ALL },
       authorizationConfig: {
         authProviders: [lambdaProvider, iamProvider],
         connectionAuthModeTypes: [appsync.AppSyncAuthorizationType.LAMBDA],
@@ -84,7 +91,7 @@ export class PlaymatStack extends Stack {
 
     const boardDs = api.addDynamoDbDataSource('BoardDs', boardTable);
 
-    const stateCode = readFileSync(join(here, '..', 'handlers', 'state.js'), 'utf8').replace(
+    const stateCode = readFileSync(join(here, '..', 'handlers', 'state.js'), 'utf8').replaceAll(
       '__BOARD_TABLE__',
       boardTable.tableName
     );
@@ -111,7 +118,12 @@ export class PlaymatStack extends Stack {
         BOARD_TABLE: boardTable.tableName,
         EVENTS_HTTP_HOST: api.httpDns,
       },
-      bundling: { minify: true, format: nodejs.OutputFormat.ESM, target: 'node22' },
+      bundling: {
+        minify: true,
+        format: nodejs.OutputFormat.ESM,
+        target: 'node22',
+        banner: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
+      },
     });
     roomsTable.grantReadWriteData(roomFn);
     boardTable.grantReadWriteData(roomFn);

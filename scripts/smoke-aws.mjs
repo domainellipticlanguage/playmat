@@ -11,7 +11,7 @@ import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outputs = JSON.parse(readFileSync(join(root, 'infra', 'outputs.json'), 'utf8')).Playmat;
-const API = outputs.ApiBase;
+const API = outputs.ApiBase.replace(/\/+$/, '');
 const REALTIME = outputs.EventsRealtime;
 const EVENTS_HOST = outputs.EventsHttpHost;
 
