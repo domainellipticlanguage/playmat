@@ -21,17 +21,29 @@ function loadKey() {
 const KEY = loadKey();
 const MODEL = 'black-forest-labs/flux-1.1-pro';
 
+const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
+
 async function generate(name, input) {
   console.log(`→ generating ${name}…`);
-  const res = await fetch(`https://api.replicate.com/v1/models/${MODEL}/predictions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'wait=60',
-    },
-    body: JSON.stringify({ input }),
-  });
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(`https://api.replicate.com/v1/models/${MODEL}/predictions`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'wait=60',
+      },
+      body: JSON.stringify({ input }),
+    });
+    if (res.status !== 429) break;
+    // Low-credit accounts are throttled to ~6 req/min, burst 1. Honor retry_after.
+    const body = await res.json().catch(() => ({}));
+    const wait = Math.min(Number(body.retry_after) || 15, 90) + 1;
+    if (attempt >= 8) throw new Error(`${name}: still throttled after ${attempt} retries`);
+    console.log(`  throttled; retrying in ${wait}s…`);
+    await sleep(wait);
+  }
   if (!res.ok) throw new Error(`${name}: replicate ${res.status} ${await res.text()}`);
   let prediction = await res.json();
   while (['starting', 'processing'].includes(prediction.status)) {
@@ -95,6 +107,7 @@ if (which === 'logos' || which === 'all') {
     });
     writeFileSync(join('art', logo.file), buf);
     console.log(`  saved art/${logo.file} (${(buf.length / 1024).toFixed(0)} KB)`);
+    await sleep(11); // stay under the low-credit rate limit
   }
 }
 
