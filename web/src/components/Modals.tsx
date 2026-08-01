@@ -675,98 +675,95 @@ function ImportModal({ onClose }: { onClose: () => void }) {
 // Opening hand: Keep / Mulligan with London-rule bottoming
 // ---------------------------------------------------------------------------
 
+type HandDest = 'keep' | 'bottom' | 'exile';
+const NEXT_DEST: Record<HandDest, HandDest> = { keep: 'bottom', bottom: 'exile', exile: 'keep' };
+const DEST_LABEL: Record<Exclude<HandDest, 'keep'>, string> = {
+  bottom: '→ bottom of library',
+  exile: '→ exile',
+};
+
+/**
+ * Archidekt-style opening hand: mulligan redraws 7; any number of cards
+ * (including none) can be sent to the bottom or exile when keeping. The
+ * London count is shown as a hint, never enforced (§1.1: players are smart).
+ */
 function OpeningHandModal({ onClose }: { onClose: () => void }) {
   const hand = useGame((s) => s.hidden.hand);
   const library = useGame((s) => s.hidden.library);
   const pool = useGame((s) => s.pool);
   const [mulligans, setMulligans] = useState(0);
-  const [bottoming, setBottoming] = useState(false);
-  const [toBottom, setToBottom] = useState<string[]>([]);
+  const [dests, setDests] = useState<Record<string, HandDest>>({});
 
-  const need = Math.min(mulligans, hand.length);
+  const cycle = (guid: string) =>
+    setDests((d) => ({ ...d, [guid]: NEXT_DEST[d[guid] ?? 'keep'] }));
+
+  const nBottom = hand.filter((g) => dests[g] === 'bottom').length;
+  const nExile = hand.filter((g) => dests[g] === 'exile').length;
 
   const keep = () => {
-    if (mulligans === 0) {
-      onClose();
-      return;
-    }
-    setBottoming(true);
-  };
-
-  const confirmBottom = () => {
-    for (const guid of toBottom) {
-      actions.moveCard(guid, { zone: 'library', libPos: 'bottom' });
+    for (const guid of hand) {
+      const dest = dests[guid] ?? 'keep';
+      if (dest === 'bottom') actions.moveCard(guid, { zone: 'library', libPos: 'bottom' });
+      else if (dest === 'exile') actions.moveCard(guid, { zone: 'exile' });
     }
     onClose();
   };
 
-  const toggleBottom = (guid: string) => {
-    setToBottom((sel) =>
-      sel.includes(guid) ? sel.filter((g) => g !== guid) : sel.length < need ? [...sel, guid] : sel
-    );
-  };
-
   return (
     <Backdrop onClose={onClose}>
-      <h3>
-        {bottoming
-          ? `Put ${need} card${need > 1 ? 's' : ''} on the bottom of your library`
-          : mulligans === 0
-            ? 'Your opening hand'
-            : `Mulligan #${mulligans} — keep this one?`}
-      </h3>
+      <h3>{mulligans === 0 ? 'Your opening hand' : `Mulligan #${mulligans} — keep this one?`}</h3>
+      <div className="subtle">
+        Click a card to cycle: keep → bottom of library → exile.
+        {mulligans > 0 && ` London rule suggests bottoming ${Math.min(mulligans, hand.length)} — your call.`}
+      </div>
       <div className="card-grid">
         {hand.map((guid) => {
           const p = pool[guid];
           const face = p ? faceAt(p, 0) : null;
-          const selected = toBottom.includes(guid);
+          const dest = dests[guid] ?? 'keep';
           return (
-            <div
-              key={guid}
-              className="gcard"
-              onClick={() => bottoming && toggleBottom(guid)}
-              style={bottoming ? { cursor: 'pointer' } : undefined}
-            >
+            <div key={guid} className="gcard" onClick={() => cycle(guid)} style={{ cursor: 'pointer' }}>
               <img
                 src={face?.img || CARD_BACK_URL}
                 alt={face?.name}
-                style={selected ? { outline: '3px solid var(--danger)', opacity: 0.6 } : undefined}
+                draggable={false}
+                style={
+                  dest === 'keep'
+                    ? undefined
+                    : {
+                        outline: `3px solid ${dest === 'bottom' ? 'var(--warn)' : 'var(--danger)'}`,
+                        opacity: 0.65,
+                      }
+                }
               />
-              {selected && <div className="glabel" style={{ color: 'var(--danger)' }}>to bottom</div>}
+              {dest !== 'keep' && (
+                <div className="glabel" style={{ color: dest === 'bottom' ? 'var(--warn)' : 'var(--danger)' }}>
+                  {DEST_LABEL[dest]}
+                </div>
+              )}
             </div>
           );
         })}
       </div>
-      {bottoming ? (
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
-          <span className="subtle">
-            {toBottom.length}/{need} selected (London mulligan)
-          </span>
-          <button onClick={() => setBottoming(false)}>Back</button>
-          <button className="primary" disabled={toBottom.length !== need} onClick={confirmBottom}>
-            Bottom {need} & start
-          </button>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
-          <span className="subtle">
-            {library.length} in library
-            {mulligans > 0 ? ` · keeping means bottoming ${need}` : ''}
-          </span>
-          <button
-            onClick={() => {
-              actions.mulligan();
-              setMulligans((n) => n + 1);
-              setToBottom([]);
-            }}
-          >
-            Mulligan (draw 7 again)
-          </button>
-          <button className="primary" onClick={keep}>
-            Keep hand
-          </button>
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
+        <span className="subtle">
+          {library.length} in library
+          {nBottom > 0 && ` · bottoming ${nBottom}`}
+          {nExile > 0 && ` · exiling ${nExile}`}
+        </span>
+        <button
+          onClick={() => {
+            actions.mulligan();
+            setMulligans((n) => n + 1);
+            setDests({});
+          }}
+        >
+          Mulligan (draw 7 again)
+        </button>
+        <button className="primary" onClick={keep}>
+          {nBottom + nExile > 0 ? `Keep ${hand.length - nBottom - nExile}` : 'Keep hand'}
+        </button>
+      </div>
     </Backdrop>
   );
 }

@@ -23,7 +23,7 @@ export function Table() {
   const connStatus = useGame((s) => s.connStatus);
   const room = useGame((s) => s.room);
   const pool = useGame((s) => s.pool);
-  const [showLog, setShowLog] = useState(true);
+  const [showLog, setShowLog] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const me = session?.playerId;
