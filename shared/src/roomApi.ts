@@ -50,6 +50,8 @@ export interface SnapshotResponse {
   logs: LogEntry[];
   /** Per-subject seq map so a rejoining client resumes its counters. */
   seqs: Record<string, { seq: number; by: string }>;
+  /** Latest deck-import epoch per owner (guards against stale pool chunks). */
+  poolImports: Record<string, string>;
   /** Requesting player's own hidden zones (never anyone else's). */
   hidden: HiddenState | null;
 }

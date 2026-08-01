@@ -45,6 +45,17 @@ export function assembleSnapshot(
   const logs: LogEntry[] = [];
   const seqs: Record<string, { seq: number; by: string }> = {};
 
+  // Only the LATEST import epoch per owner counts; stale chunks from an
+  // earlier, larger deck import must not ghost back in. Tokens (no importId)
+  // always count.
+  const latestImport = new Map<string, string>();
+  for (const item of bySk.values()) {
+    if (item.ev.t === 'pool' && item.ev.importId) {
+      const cur = latestImport.get(item.ev.by);
+      if (!cur || item.ev.importId > cur) latestImport.set(item.ev.by, item.ev.importId);
+    }
+  }
+
   for (const item of bySk.values()) {
     seqs[item.sk] = { seq: item.seq, by: item.by };
     if (GAME_SCOPED.includes(item.t) && gameId !== null && item.g !== gameId) continue;
@@ -57,6 +68,7 @@ export function assembleSnapshot(
         playerStates.push(ev.player);
         break;
       case 'pool':
+        if (ev.importId && ev.importId !== latestImport.get(ev.by)) break;
         pools.push(...ev.cards);
         break;
       case 'log':
@@ -67,5 +79,14 @@ export function assembleSnapshot(
 
   logs.sort((a, b) => a.ts - b.ts);
 
-  return { players: seats, room, cards, playerStates, pools, logs, seqs };
+  return {
+    players: seats,
+    room,
+    cards,
+    playerStates,
+    pools,
+    logs,
+    seqs,
+    poolImports: Object.fromEntries(latestImport),
+  };
 }

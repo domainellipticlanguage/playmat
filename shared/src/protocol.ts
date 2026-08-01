@@ -51,6 +51,17 @@ export interface CardState {
   revealed?: boolean;
   /** Tombstone: token removed from the game. */
   del?: boolean;
+  /**
+   * Whose zone the card is in, when not the card's owner (Z-6: any card can
+   * move to any player's zones). Defaults to ownerId.
+   */
+  zoneOwnerId?: string;
+  /**
+   * Placement hint when a card is sent to a (hidden) library by someone other
+   * than the zone owner: the owner's client integrates it at this position.
+   * 'top' | 'bottom' | N (Nth from top, 0-based).
+   */
+  libPos?: 'top' | 'bottom' | number;
 }
 
 export interface PlayerState {
@@ -145,7 +156,21 @@ export interface SeatsPayload {
 export type StateEvent =
   | { t: 'card'; g: string; by: string; seq: number; card: CardState }
   | { t: 'player'; g: string; by: string; seq: number; player: PlayerState }
-  | { t: 'pool'; g: string; by: string; seq: number; chunk: number; nChunks: number; cards: PoolCard[] }
+  | {
+      t: 'pool';
+      g: string;
+      by: string;
+      seq: number;
+      chunk: number;
+      nChunks: number;
+      cards: PoolCard[];
+      /**
+       * Deck-import epoch (lexicographically increasing). All chunks of one
+       * import share it; a NEW importId replaces the owner's previous
+       * non-token pool entirely. Token pool events omit it (tokens accrete).
+       */
+      importId?: string;
+    }
   | { t: 'room'; g: string; by: string; seq: number; room: RoomState }
   | { t: 'log'; g: string; by: string; seq: number; entry: LogEntry }
   | { t: 'seats'; g: string; by: string; seq: number; seats: SeatsPayload['seats'] };
