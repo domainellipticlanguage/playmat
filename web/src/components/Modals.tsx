@@ -4,7 +4,7 @@ import { newGuid, parseDecklist } from '@playmat/shared';
 import { useGame } from '../store';
 import { useUI, type ModalState } from '../uiStore';
 import * as actions from '../actions';
-import { CARD_BACK_URL, faceAt, useCustomDisplay } from '../cards';
+import { CARD_BACK_URL, deckColorIdentity, faceAt, manaSymbolUrl, useCustomDisplay } from '../cards';
 import { resolveDeckByNames, resolveByIds, searchTokens, toPoolCard, type ScryfallCard } from '../scryfall';
 import { fetchArchidektDeck, parseArchidektUrl } from '../archidekt';
 import { persisted } from '../session';
@@ -420,6 +420,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
     setProblems([]);
     setStatus('Parsing decklist…');
     try {
+      setDeckName(null); // pasted lists have no name; fall back to commander
       const parsed = parseDecklist(text);
       if (parsed.entries.length === 0) throw new Error('No cards found in the list.');
       setStatus(`Resolving ${parsed.entries.length} lines via Scryfall…`);
@@ -466,6 +467,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
       const listText = lines.join('\n');
       setText(listText);
 
+      setDeckName(deck.name);
       setStatus(`Resolving ${deck.entries.length} cards via Scryfall…`);
       const { cards, notFound } = await resolveByIds(deck.entries, me);
       setProblems(notFound.map((n) => `unresolved id: ${n}`));
@@ -536,11 +538,16 @@ function ImportModal({ onClose }: { onClose: () => void }) {
                 <button className="primary small" onClick={() => importSaved(d.id)}>
                   Import
                 </button>
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  <b>{d.name}</b>{' '}
-                  <span className="subtle">
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <b>{d.name}</b>
+                  {deckColorIdentity(d.cards).map((c) => (
+                    <img key={c} src={manaSymbolUrl(c)} alt={c} style={{ width: 15, height: 15, flexShrink: 0 }} />
+                  ))}
+                  <span className="subtle" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {d.count} cards
-                    {d.commanders.length ? ` · ${d.commanders.join(' + ')}` : ''}
+                    {d.commanders.length && d.commanders.join(' + ') !== d.name
+                      ? ` · ${d.commanders.join(' + ')}`
+                      : ''}
                     {` · ${new Date(d.savedAt).toLocaleDateString()}`}
                   </span>
                 </span>

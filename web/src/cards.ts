@@ -87,6 +87,43 @@ export function hasRotationStates(pool: PoolCard): boolean {
 export const CARD_BACK_URL =
   'https://backs.scryfall.io/normal/2/2/222b7a3b-2321-4d4c-af19-19338b134971.jpg';
 
+// ---------------------------------------------------------------------------
+// Mana symbols (crucible's own CDN assets, symbols/mana/*.svg)
+// ---------------------------------------------------------------------------
+
+const WUBRG = ['W', 'U', 'B', 'R', 'G'] as const;
+
+export function manaSymbolUrl(color: string): string {
+  return `https://mtg-crucible-assets-v1.pages.dev/symbols/mana/${color.toLowerCase()}.svg`;
+}
+
+/**
+ * A deck's color identity in WUBRG order. With commanders present, identity
+ * comes from their mana costs + rules text (the actual rule); otherwise from
+ * mana costs across the whole list.
+ */
+export function deckColorIdentity(cards: Pick<PoolCard, 'sf' | 'commander'>[]): string[] {
+  const found = new Set<string>();
+  const scan = (text?: string) => {
+    if (!text) return;
+    for (const m of text.matchAll(/\{([^}]+)\}/g)) {
+      for (const ch of m[1].toUpperCase()) if ((WUBRG as readonly string[]).includes(ch)) found.add(ch);
+    }
+  };
+  const commanders = cards.filter((c) => c.commander);
+  if (commanders.length) {
+    for (const c of commanders) {
+      for (const f of c.sf?.faces ?? []) {
+        scan(f.mana);
+        scan(f.oracle);
+      }
+    }
+  } else {
+    for (const c of cards) for (const f of c.sf?.faces ?? []) scan(f.mana);
+  }
+  return WUBRG.filter((c) => found.has(c));
+}
+
 /**
  * Display data for MtgCard, pinned to one synced state: the current face's
  * image only, no rotations array — so the component's own click-to-rotate
