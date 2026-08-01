@@ -19,15 +19,17 @@ function loadKey() {
 }
 
 const KEY = loadKey();
-const MODEL = 'black-forest-labs/flux-1.1-pro';
+/** nano-banana (Gemini 2.5 Flash Image) for the table; flux for the legacy logo option. */
+const TABLE_MODEL = 'google/nano-banana';
+const LOGO_MODEL = 'black-forest-labs/flux-1.1-pro';
 
 const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
 
-async function generate(name, input) {
-  console.log(`→ generating ${name}…`);
+async function generate(name, model, input) {
+  console.log(`→ generating ${name} (${model})…`);
   let res;
   for (let attempt = 0; ; attempt++) {
-    res = await fetch(`https://api.replicate.com/v1/models/${MODEL}/predictions`, {
+    res = await fetch(`https://api.replicate.com/v1/models/${model}/predictions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${KEY}`,
@@ -67,13 +69,11 @@ mkdirSync('art', { recursive: true });
 mkdirSync('web/public', { recursive: true });
 
 if (which === 'table' || which === 'all') {
-  const buf = await generate('table background', {
+  const buf = await generate('table background', TABLE_MODEL, {
     prompt:
-      'Top-down orthographic view of an empty massive medieval fantasy tavern gaming table surface filling the entire frame edge to edge. Dark hewn oak planks with subtle iron banding and faint carved stone inlay border. In the very center, a large faint compass rose worn into the wood with elegant carved letters N, S, E, W at its four points. Wood grain worn smooth by decades of card games, subtle candlelight glow from above, warm dark amber and umber tones, muted, atmospheric, high detail texture. No objects, no cards, no people, no text other than the compass letters.',
+      'A photographed texture of a large old wooden tavern table, seen perfectly top-down, the wood filling the entire frame edge to edge. Dark oak planks worn smooth and slightly glossy from years of use, subtle natural wood grain, faint knife marks and ring stains, soft warm candlelight falling from above with gentle vignetting toward the edges. Muted dark amber and umber tones, moody and atmospheric but understated — a background that stays quiet behind objects placed on it. Absolutely plain surface: no symbols, no carvings, no emblems, no compass, no text, no objects, no borders or frames.',
     aspect_ratio: '1:1',
     output_format: 'jpg',
-    output_quality: 88,
-    safety_tolerance: 2,
   });
   writeFileSync(join('art', 'table.jpg'), buf);
   writeFileSync(join('web', 'public', 'table.jpg'), buf);
@@ -99,7 +99,7 @@ if (which === 'logos' || which === 'all') {
     },
   ];
   for (const logo of logos) {
-    const buf = await generate(logo.file, {
+    const buf = await generate(logo.file, LOGO_MODEL, {
       prompt: logo.prompt,
       aspect_ratio: '1:1',
       output_format: 'png',
