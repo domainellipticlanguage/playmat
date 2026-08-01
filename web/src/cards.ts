@@ -93,8 +93,9 @@ export const CARD_BACK_URL =
 
 const WUBRG = ['W', 'U', 'B', 'R', 'G'] as const;
 
+/** Vendored crucible mana symbols (web/public/mana/, incl. colorless c.svg). */
 export function manaSymbolUrl(color: string): string {
-  return `https://mtg-crucible-assets-v1.pages.dev/symbols/mana/${color.toLowerCase()}.svg`;
+  return `/mana/${color.toLowerCase()}.svg`;
 }
 
 /**
