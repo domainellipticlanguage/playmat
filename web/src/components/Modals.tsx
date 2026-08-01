@@ -513,31 +513,50 @@ function ImportModal({ onClose }: { onClose: () => void }) {
       {savedDecks.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span className="subtle">Your decks (saved on this device — no re-resolving needed):</span>
-          {savedDecks.map((d) => (
-            <div key={d.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <button className="primary small" onClick={() => importSaved(d.id)}>
-                Import
-              </button>
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                <b>{d.name}</b>{' '}
-                <span className="subtle">
-                  {d.count} cards
-                  {d.commanders.length ? ` · ${d.commanders.join(' + ')}` : ''}
-                  {` · ${new Date(d.savedAt).toLocaleDateString()}`}
+          {savedDecks.map((d) => {
+            // Commander art as the deck's face ("oh yeah, my Animar deck").
+            // Scryfall's CDN serves an art crop at the same path as the card image.
+            const faceCard = d.cards.find((c) => c.commander) ?? d.cards[0];
+            const cardImg = faceCard?.sf?.faces[0]?.img;
+            const artCrop = cardImg?.replace('/normal/', '/art_crop/');
+            return (
+              <div key={d.id} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                {artCrop && (
+                  <img
+                    src={artCrop}
+                    alt=""
+                    style={{ width: 72, height: 52, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--panel-border)', cursor: 'pointer', flexShrink: 0 }}
+                    onClick={() => importSaved(d.id)}
+                    onError={(e) => {
+                      // Art crop missing for this printing — fall back to the card face.
+                      if (cardImg && e.currentTarget.src !== cardImg) e.currentTarget.src = cardImg;
+                    }}
+                  />
+                )}
+                <button className="primary small" onClick={() => importSaved(d.id)}>
+                  Import
+                </button>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <b>{d.name}</b>{' '}
+                  <span className="subtle">
+                    {d.count} cards
+                    {d.commanders.length ? ` · ${d.commanders.join(' + ')}` : ''}
+                    {` · ${new Date(d.savedAt).toLocaleDateString()}`}
+                  </span>
                 </span>
-              </span>
-              <button
-                className="small"
-                title="Forget this deck"
-                onClick={() => {
-                  persisted.deleteDeck(d.id);
-                  setSavedDecks(persisted.listDecks());
-                }}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
+                <button
+                  className="small"
+                  title="Forget this deck"
+                  onClick={() => {
+                    persisted.deleteDeck(d.id);
+                    setSavedDecks(persisted.listDecks());
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
           <div style={{ borderTop: '1px solid var(--panel-border)', margin: '4px 0' }} />
         </div>
       )}
