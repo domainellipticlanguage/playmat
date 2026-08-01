@@ -440,12 +440,27 @@ function ImportModal({ onClose }: { onClose: () => void }) {
     try {
       setStatus('Fetching from Archidekt…');
       const deck = await fetchArchidektDeck(deckId);
+
+      // Mirror the fetched deck into the textarea: inspectable, editable, and
+      // re-resolvable by name if tweaked.
+      const commanders = deck.entries.filter((e) => e.commander);
+      const rest = deck.entries.filter((e) => !e.commander);
+      const lines: string[] = [];
+      if (commanders.length) {
+        lines.push('// Commander');
+        for (const e of commanders) lines.push(`${e.count}x ${e.name}`);
+        lines.push('', '// Deck');
+      }
+      for (const e of rest) lines.push(`${e.count}x ${e.name}`);
+      const listText = lines.join('\n');
+      setText(listText);
+
       setStatus(`Resolving ${deck.entries.length} cards via Scryfall…`);
       const { cards, notFound } = await resolveByIds(deck.entries, me);
       setProblems(notFound.map((n) => `unresolved id: ${n}`));
       setPending(cards);
-      setStatus(`"${deck.name}" — ${cards.length} cards ready.`);
-      persisted.patch({ archidektUrl: url });
+      setStatus(`"${deck.name}" — ${cards.length} cards ready (decklist shown below; edit + Resolve to override).`);
+      persisted.patch({ archidektUrl: url, decklistText: listText });
     } catch (err) {
       setStatus(null);
       setProblems([String((err as Error).message ?? err)]);
