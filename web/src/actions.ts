@@ -479,7 +479,11 @@ export function importDeck(cards: PoolCard[]): void {
   const alreadyPlaying = Object.values(s.pool).some((p) => p.ownerId === me && !p.isToken);
   const bumpGame = !s.room?.gameId || alreadyPlaying;
   const gameId = bumpGame ? newGuid() : s.room!.gameId;
-  const importId = `${Date.now().toString(36)}-${newGuid().slice(0, 8)}`;
+  // importId must be lexicographically GREATER than any previous import of
+  // mine — two imports in the same millisecond would otherwise race.
+  let importId = `${Date.now().toString(36)}-${newGuid().slice(0, 8)}`;
+  const prevImport = s.poolImports[me];
+  if (prevImport && importId <= prevImport) importId = `${prevImport}1`;
   const events: StateEvent[] = [];
 
   const CHUNK = 15;

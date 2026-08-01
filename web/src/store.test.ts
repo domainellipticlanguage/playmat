@@ -167,13 +167,19 @@ describe('hidden-zone bookkeeping', () => {
     actions.playFromHand(guid, 500, 600);
     let s = useGame.getState();
     expect(s.cards[guid]).toMatchObject({ zone: 'battlefield', x: 500, y: 600 });
-    expect(s.hidden.hand).toHaveLength(2);
 
     actions.tapCards([guid], true);
     actions.setCounter(guid, '+1/+1', 3);
     actions.moveCard(guid, { zone: 'graveyard' });
     s = useGame.getState();
     expect(s.cards[guid]).toMatchObject({ zone: 'graveyard', tapped: false, counters: {}, order: 1 });
+  });
+
+  it('opening hand shrinks by one after playing a drawn card', () => {
+    actions.drawCards(3); // 7 opening + 3 = 10
+    const guid = useGame.getState().hidden.hand[0];
+    actions.playFromHand(guid, 500, 600);
+    expect(useGame.getState().hidden.hand).toHaveLength(9);
   });
 
   it('tuck to library bottom returns the card to hidden order', () => {
