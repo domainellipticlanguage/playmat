@@ -1,12 +1,79 @@
-import { useMemo } from 'react';
-import type { PlayerState, SeatRecord } from '@playmat/shared';
+import { useMemo, useRef, useState } from 'react';
+import type { PlayerState, SeatRecord, ZoneName } from '@playmat/shared';
 import { useGame } from '../store';
 import { useUI } from '../uiStore';
 import * as actions from '../actions';
 import { CARD_BACK_URL, faceAt } from '../cards';
-import { relativeEdge } from '../view';
+import { liveView, relativeEdge, screenToWorld } from '../view';
 
 const PLAYER_COUNTERS = ['poison', 'energy', 'experience'];
+
+/** Where a pile drag ended up. */
+type PileDropTarget =
+  | { kind: 'zone'; zone: ZoneName; zoneOwnerId?: string }
+  | { kind: 'battlefield'; x: number; y: number };
+
+type PileDropFn = (target: PileDropTarget, shiftKey: boolean) => void;
+
+/**
+ * Drag-from-pile plumbing: piles are drag sources as well as drop targets.
+ * Below the movement threshold the gesture stays a click (draw / open modal);
+ * past it a ghost follows the pointer and the drop function fires on release.
+ */
+function usePileDrag() {
+  const [ghost, setGhost] = useState<{ img: string; x: number; y: number } | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; moved: boolean; img: string; drop: PileDropFn } | null>(null);
+  const suppressClick = useRef(false);
+
+  const start = (img: string, drop: PileDropFn) => (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    dragRef.current = { startX: e.clientX, startY: e.clientY, moved: false, img, drop };
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+  };
+
+  const move = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 6) {
+      d.moved = true;
+      useUI.getState().setDragging('pile');
+    }
+    if (d.moved) setGhost({ img: d.img, x: e.clientX, y: e.clientY });
+  };
+
+  const end = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    dragRef.current = null;
+    setGhost(null);
+    useUI.getState().setDragging(null);
+    if (!d?.moved) return; // plain click — let onClick handle it
+    suppressClick.current = true;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const zoneEl = el?.closest('[data-drop]') as HTMLElement | null;
+    if (zoneEl) {
+      const [zone, zoneOwnerId] = zoneEl.dataset.drop!.split(':');
+      d.drop({ kind: 'zone', zone: zone as ZoneName, zoneOwnerId: zoneOwnerId || undefined }, e.shiftKey);
+      return;
+    }
+    const bf = el?.closest('.battlefield-viewport');
+    if (bf) {
+      const r = bf.getBoundingClientRect();
+      const w = screenToWorld(liveView.current, e.clientX - r.left, e.clientY - r.top);
+      d.drop({ kind: 'battlefield', x: w.x, y: w.y }, e.shiftKey);
+    }
+  };
+
+  /** Wrap a pile's onClick so a completed drag doesn't also count as a click. */
+  const guardClick = (onClick: () => void) => () => {
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return;
+    }
+    onClick();
+  };
+
+  return { ghost, start, move, end, guardClick };
+}
 
 export function PlayerHud({ player }: { player: SeatRecord }) {
   const session = useGame((s) => s.session);
@@ -36,6 +103,36 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
 
   const lastSeen = presence[pid] ?? (isMe ? Date.now() : 0);
   const presenceClass = isMe || Date.now() - lastSeen < 25_000 ? 'connected' : lastSeen ? 'away' : '';
+
+  const pileDrag = usePileDrag();
+
+  /** Drag the (hidden) top of my library: battlefield = play, hand = draw, graveyard = mill. */
+  const dropFromLibrary: PileDropFn = (target, shift) => {
+    const top = useGame.getState().hidden.library[0];
+    if (!top) return;
+    if (target.kind === 'battlefield') {
+      actions.moveCard(top, { zone: 'battlefield', x: target.x, y: target.y, faceDown: shift });
+    } else if (target.zone === 'hand' && (target.zoneOwnerId ?? pid) === pid) {
+      actions.drawCards(1);
+    } else if (target.zone !== 'library') {
+      actions.moveCard(top, { zone: target.zone, zoneOwnerId: target.zoneOwnerId });
+    }
+  };
+
+  /** Drag the top card of a public pile (graveyard/exile/command) anywhere. */
+  const dropFromPileCard =
+    (guid: string): PileDropFn =>
+    (target, shift) => {
+      if (target.kind === 'battlefield') {
+        actions.moveCard(guid, { zone: 'battlefield', x: target.x, y: target.y, faceDown: shift });
+      } else {
+        actions.moveCard(guid, {
+          zone: target.zone,
+          zoneOwnerId: target.zoneOwnerId,
+          libPos: target.zone === 'library' ? 'top' : undefined,
+        });
+      }
+    };
 
   // Zone piles: cards whose zone-owner is this player.
   const piles = useMemo(() => {
@@ -200,9 +297,19 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         <div
           className="pile"
           data-drop={`library:${pid}`}
-          title={isMe ? 'Click: draw · right-click: library actions' : `${player.name}'s library`}
-          onClick={() => isMe && actions.drawCards(1)}
+          title={isMe ? 'Click: draw · drag top card out · right-click: library actions' : `${player.name}'s library`}
+          onClick={pileDrag.guardClick(() => isMe && actions.drawCards(1))}
           onContextMenu={libraryMenu}
+          onPointerDown={
+            isMe && libraryCount > 0
+              ? pileDrag.start(
+                  topRevealedPool ? faceAt(topRevealedPool, 0)?.img || CARD_BACK_URL : CARD_BACK_URL,
+                  dropFromLibrary
+                )
+              : undefined
+          }
+          onPointerMove={pileDrag.move}
+          onPointerUp={pileDrag.end}
         >
           {libraryCount > 0 &&
             (topRevealedPool ? (
@@ -217,8 +324,20 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         <div
           className="pile"
           data-drop={`graveyard:${pid}`}
-          onClick={() => useUI.getState().openModal({ kind: 'zone', zone: 'graveyard', zoneOwnerId: pid })}
-          title="Graveyard (click to expand)"
+          onClick={pileDrag.guardClick(() =>
+            useUI.getState().openModal({ kind: 'zone', zone: 'graveyard', zoneOwnerId: pid })
+          )}
+          title="Graveyard (click to expand · drag top card out)"
+          onPointerDown={
+            piles.gy[0]
+              ? pileDrag.start(
+                  faceAt(pool[piles.gy[0].guid], piles.gy[0].rotIndex)?.img || CARD_BACK_URL,
+                  dropFromPileCard(piles.gy[0].guid)
+                )
+              : undefined
+          }
+          onPointerMove={pileDrag.move}
+          onPointerUp={pileDrag.end}
         >
           {piles.gy[0] && <img src={faceAt(pool[piles.gy[0].guid], piles.gy[0].rotIndex)?.img || CARD_BACK_URL} alt="graveyard top" />}
           <span className="pile-count">{piles.gy.length}</span>
@@ -228,8 +347,20 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         <div
           className="pile"
           data-drop={`exile:${pid}`}
-          onClick={() => useUI.getState().openModal({ kind: 'zone', zone: 'exile', zoneOwnerId: pid })}
-          title="Exile (click to expand)"
+          onClick={pileDrag.guardClick(() =>
+            useUI.getState().openModal({ kind: 'zone', zone: 'exile', zoneOwnerId: pid })
+          )}
+          title="Exile (click to expand · drag top card out)"
+          onPointerDown={
+            piles.exile[0]
+              ? pileDrag.start(
+                  faceAt(pool[piles.exile[0].guid], piles.exile[0].rotIndex)?.img || CARD_BACK_URL,
+                  dropFromPileCard(piles.exile[0].guid)
+                )
+              : undefined
+          }
+          onPointerMove={pileDrag.move}
+          onPointerUp={pileDrag.end}
         >
           {piles.exile[0] && <img src={faceAt(pool[piles.exile[0].guid], piles.exile[0].rotIndex)?.img || CARD_BACK_URL} alt="exile top" />}
           <span className="pile-count">{piles.exile.length}</span>
@@ -239,8 +370,20 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         <div
           className="pile"
           data-drop={`command:${pid}`}
-          onClick={() => useUI.getState().openModal({ kind: 'zone', zone: 'command', zoneOwnerId: pid })}
-          title="Command zone"
+          onClick={pileDrag.guardClick(() =>
+            useUI.getState().openModal({ kind: 'zone', zone: 'command', zoneOwnerId: pid })
+          )}
+          title="Command zone (drag commander to battlefield to cast)"
+          onPointerDown={
+            piles.command[0]
+              ? pileDrag.start(
+                  faceAt(pool[piles.command[0].guid], 0)?.img || CARD_BACK_URL,
+                  dropFromPileCard(piles.command[0].guid)
+                )
+              : undefined
+          }
+          onPointerMove={pileDrag.move}
+          onPointerUp={pileDrag.end}
         >
           {piles.command[0] && (
             <img src={faceAt(pool[piles.command[0].guid], 0)?.img || CARD_BACK_URL} alt="command zone" />
@@ -256,6 +399,22 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, color: 'var(--ink-dim)' }}>🂠</div>
         </div>
       </div>
+      {pileDrag.ghost && (
+        <img
+          src={pileDrag.ghost.img}
+          style={{
+            position: 'fixed',
+            left: pileDrag.ghost.x - 40,
+            top: pileDrag.ghost.y - 56,
+            width: 80,
+            borderRadius: 5,
+            opacity: 0.85,
+            pointerEvents: 'none',
+            zIndex: 80,
+            boxShadow: '0 6px 18px rgba(0,0,0,0.7)',
+          }}
+        />
+      )}
     </div>
   );
 }
