@@ -553,6 +553,11 @@ export function runNewGameSetup(gameId: string): void {
   syncHandReveals(events);
   sendState(events);
   flushHidden();
+
+  // The decision moment: show the dealt hand with Keep / Mulligan.
+  if (hand.length > 0) {
+    void import('./uiStore').then(({ useUI }) => useUI.getState().openModal({ kind: 'openingHand' }));
+  }
 }
 
 /**

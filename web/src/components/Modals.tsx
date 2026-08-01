@@ -627,6 +627,106 @@ function ImportModal({ onClose }: { onClose: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
+// Opening hand: Keep / Mulligan with London-rule bottoming
+// ---------------------------------------------------------------------------
+
+function OpeningHandModal({ onClose }: { onClose: () => void }) {
+  const hand = useGame((s) => s.hidden.hand);
+  const library = useGame((s) => s.hidden.library);
+  const pool = useGame((s) => s.pool);
+  const [mulligans, setMulligans] = useState(0);
+  const [bottoming, setBottoming] = useState(false);
+  const [toBottom, setToBottom] = useState<string[]>([]);
+
+  const need = Math.min(mulligans, hand.length);
+
+  const keep = () => {
+    if (mulligans === 0) {
+      onClose();
+      return;
+    }
+    setBottoming(true);
+  };
+
+  const confirmBottom = () => {
+    for (const guid of toBottom) {
+      actions.moveCard(guid, { zone: 'library', libPos: 'bottom' });
+    }
+    onClose();
+  };
+
+  const toggleBottom = (guid: string) => {
+    setToBottom((sel) =>
+      sel.includes(guid) ? sel.filter((g) => g !== guid) : sel.length < need ? [...sel, guid] : sel
+    );
+  };
+
+  return (
+    <Backdrop onClose={onClose}>
+      <h3>
+        {bottoming
+          ? `Put ${need} card${need > 1 ? 's' : ''} on the bottom of your library`
+          : mulligans === 0
+            ? 'Your opening hand'
+            : `Mulligan #${mulligans} — keep this one?`}
+      </h3>
+      <div className="card-grid">
+        {hand.map((guid) => {
+          const p = pool[guid];
+          const face = p ? faceAt(p, 0) : null;
+          const selected = toBottom.includes(guid);
+          return (
+            <div
+              key={guid}
+              className="gcard"
+              onClick={() => bottoming && toggleBottom(guid)}
+              style={bottoming ? { cursor: 'pointer' } : undefined}
+            >
+              <img
+                src={face?.img || CARD_BACK_URL}
+                alt={face?.name}
+                style={selected ? { outline: '3px solid var(--danger)', opacity: 0.6 } : undefined}
+              />
+              {selected && <div className="glabel" style={{ color: 'var(--danger)' }}>to bottom</div>}
+            </div>
+          );
+        })}
+      </div>
+      {bottoming ? (
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
+          <span className="subtle">
+            {toBottom.length}/{need} selected (London mulligan)
+          </span>
+          <button onClick={() => setBottoming(false)}>Back</button>
+          <button className="primary" disabled={toBottom.length !== need} onClick={confirmBottom}>
+            Bottom {need} & start
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
+          <span className="subtle">
+            {library.length} in library
+            {mulligans > 0 ? ` · keeping means bottoming ${need}` : ''}
+          </span>
+          <button
+            onClick={() => {
+              actions.mulligan();
+              setMulligans((n) => n + 1);
+              setToBottom([]);
+            }}
+          >
+            Mulligan (draw 7 again)
+          </button>
+          <button className="primary" onClick={keep}>
+            Keep hand
+          </button>
+        </div>
+      )}
+    </Backdrop>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Preferences
 // ---------------------------------------------------------------------------
 
@@ -715,6 +815,8 @@ export function ModalHost() {
       return <ImportModal onClose={close} />;
     case 'prefs':
       return <PrefsModal onClose={close} />;
+    case 'openingHand':
+      return <OpeningHandModal onClose={close} />;
     case 'confirm':
       return (
         <Backdrop onClose={close}>

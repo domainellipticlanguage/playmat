@@ -20,7 +20,8 @@ export type ModalState =
   | { kind: 'confirm'; title: string; body: string; onConfirm: () => void }
   | { kind: 'import' }
   | { kind: 'prefs' }
-  | { kind: 'revealed'; playerId: string };
+  | { kind: 'revealed'; playerId: string }
+  | { kind: 'openingHand' };
 
 export interface CtxMenuState {
   x: number;
