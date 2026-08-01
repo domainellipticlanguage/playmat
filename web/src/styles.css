@@ -64,11 +64,8 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
     var(--bg);
 }
 .lobby h1 {
-  font-size: 44px;
-  letter-spacing: 3px;
   margin: 0;
-  color: var(--accent);
-  text-shadow: 0 2px 12px rgba(201, 163, 74, 0.35);
+  filter: drop-shadow(0 2px 14px rgba(201, 163, 74, 0.3));
 }
 .lobby .tagline { color: var(--ink-dim); margin-top: -12px; }
 .lobby .card {

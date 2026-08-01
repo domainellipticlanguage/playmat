@@ -37,7 +37,9 @@ export function Lobby() {
 
   return (
     <div className="lobby">
-      <h1>PLAYMAT</h1>
+      <h1>
+        <img src="/logo.svg" alt="Playmat" style={{ width: 'min(400px, 80vw)', display: 'block' }} />
+      </h1>
       <div className="tagline">a shared kitchen table for paper-style Magic</div>
       <div className="card">
         <div className="row">

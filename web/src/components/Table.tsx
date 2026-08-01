@@ -70,8 +70,9 @@ export function Table() {
   return (
     <div className="table-root">
       <div className="topbar">
+        <img src="/favicon.svg" alt="" style={{ height: 24, marginRight: -4 }} />
         <span className="code" title="Click to copy invite link" onClick={copyInvite}>
-          ⌘ {session.roomCode} {copied && <span style={{ fontSize: 11 }}>copied!</span>}
+          {session.roomCode} {copied && <span style={{ fontSize: 11 }}>copied!</span>}
         </span>
         <span className={`status ${connStatus}`}>
           {connStatus === 'connected' ? '● live' : connStatus === 'reconnecting' ? '◌ reconnecting…' : connStatus}

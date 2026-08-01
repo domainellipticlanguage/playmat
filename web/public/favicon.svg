@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
+  <defs>
+    <linearGradient id="cardface" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#392b1a"/>
+      <stop offset="1" stop-color="#20170d"/>
+    </linearGradient>
+  </defs>
+  <!-- fan only, beefed-up strokes and pips so it survives 16px -->
+  <g transform="translate(120,172) scale(1.12)">
+    <g transform="rotate(-28)"><rect x="-32" y="-96" width="64" height="90" rx="9" fill="url(#cardface)" stroke="#d8e3e8" stroke-width="5"/><circle cx="0" cy="-51" r="13" fill="#d8e3e8"/></g>
+    <g transform="rotate(-14)"><rect x="-32" y="-100" width="64" height="90" rx="9" fill="url(#cardface)" stroke="#5f8dc9" stroke-width="5"/><circle cx="0" cy="-55" r="13" fill="#5f8dc9"/></g>
+    <g transform="rotate(0)"><rect x="-32" y="-102" width="64" height="90" rx="9" fill="url(#cardface)" stroke="#8f86a8" stroke-width="5"/><circle cx="0" cy="-57" r="13" fill="#8f86a8"/></g>
+    <g transform="rotate(14)"><rect x="-32" y="-100" width="64" height="90" rx="9" fill="url(#cardface)" stroke="#b0483c" stroke-width="5"/><circle cx="0" cy="-55" r="13" fill="#b0483c"/></g>
+    <g transform="rotate(28)"><rect x="-32" y="-96" width="64" height="90" rx="9" fill="url(#cardface)" stroke="#5d8a4e" stroke-width="5"/><circle cx="0" cy="-51" r="13" fill="#5d8a4e"/></g>
+  </g>
+</svg>
