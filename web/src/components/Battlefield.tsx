@@ -110,17 +110,17 @@ export function Battlefield() {
     if (useUI.getState().ctxMenu) return;
     const local = toLocal(e);
     const world = screenToWorld(view, local.x, local.y);
+    const cardEl = (e.target as HTMLElement).closest('[data-guid]') as HTMLElement | null;
 
-    // Pan: middle button or alt+drag.
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    // Pan: right-drag on the background (cards keep their context menu),
+    // middle button, or alt+drag from anywhere.
+    if ((e.button === 2 && !cardEl) || e.button === 1 || (e.button === 0 && e.altKey)) {
       panRef.current = { startX: local.x, startY: local.y, cx: view.cx, cy: view.cy };
-      (e.target as Element).setPointerCapture?.(e.pointerId);
+      viewportRef.current!.setPointerCapture(e.pointerId);
       e.preventDefault();
       return;
     }
     if (e.button !== 0) return;
-
-    const cardEl = (e.target as HTMLElement).closest('[data-guid]') as HTMLElement | null;
     if (cardEl) {
       const guid = cardEl.dataset.guid!;
       const st = useGame.getState();
@@ -253,19 +253,16 @@ export function Battlefield() {
 
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    if (e.ctrlKey || e.metaKey) {
-      // Pinch (arrives as ctrl+wheel) or ⌘/Ctrl+wheel: zoom toward the cursor.
-      const local = toLocal(e);
-      const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0012));
-      setView((v) => {
-        const k = Math.min(1.4, Math.max(0.08, v.k * factor));
-        const scale = k / v.k;
-        return clampView({ ...v, k, cx: local.x - (local.x - v.cx) * scale, cy: local.y - (local.y - v.cy) * scale });
-      });
-    } else {
-      // Two-finger scroll / plain wheel: pan.
-      setView((v) => clampView({ ...v, cx: v.cx - e.deltaX, cy: v.cy - e.deltaY }));
-    }
+    // Wheel and two-finger scroll zoom toward the cursor; pinch (which
+    // arrives as ctrl+wheel) zooms with matching sensitivity. Panning is
+    // right-drag on the background.
+    const local = toLocal(e);
+    const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0012));
+    setView((v) => {
+      const k = Math.min(1.4, Math.max(0.08, v.k * factor));
+      const scale = k / v.k;
+      return clampView({ ...v, k, cx: local.x - (local.x - v.cx) * scale, cy: local.y - (local.y - v.cy) * scale });
+    });
   };
 
   const faceAngleOverride = prefs.faceOpponentCards ? seatAngle(mySeat) : null;
@@ -335,8 +332,8 @@ export function Battlefield() {
         />
       )}
       <div className="help-hint">
-        click: tap · drag: move · shift-click: multi-select · drag empty: box select · scroll: pan ·
-        pinch or ⌘-wheel: zoom · alt-drag: pan
+        click: tap · drag: move · shift-click: multi-select · drag empty: box select ·
+        right-drag: pan · scroll or pinch: zoom
       </div>
     </div>
   );
