@@ -25,6 +25,11 @@ export interface Prefs {
   faceOpponentCards: boolean;
   /** Ephemeral publish rate for cursor/drag, events per second (E-4). */
   cursorRate: number;
+  /** Broadcast my cursor position to the table (P-2). Off by default —
+   * drag ghosts still broadcast; idle mousing stays private. */
+  shareCursor: boolean;
+  /** Show the big hover card preview. */
+  hoverPreview: boolean;
   /** Teaching mode: continuously reveal my hand to the table. */
   showHandToTable: boolean;
   defaultLife: number;
@@ -82,6 +87,8 @@ interface GameStore {
 const DEFAULT_PREFS: Prefs = {
   faceOpponentCards: false,
   cursorRate: 8,
+  shareCursor: false,
+  hoverPreview: true,
   showHandToTable: false,
   defaultLife: 40,
 };

@@ -89,7 +89,7 @@ export function Battlefield() {
   };
 
   const publishCursor = (world: { x: number; y: number }) => {
-    if (!session) return;
+    if (!session || !prefs.shareCursor) return;
     const minGap = 1000 / Math.max(2, prefs.cursorRate);
     const now = performance.now();
     if (now - lastCursorSent.current < minGap) return;

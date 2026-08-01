@@ -627,6 +627,22 @@ function PrefsModal({ onClose }: { onClose: () => void }) {
         Teaching mode: continuously reveal my hand to the table
       </label>
       <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input
+          type="checkbox"
+          checked={prefs.shareCursor}
+          onChange={(e) => setPrefs({ shareCursor: e.target.checked })}
+        />
+        Share my cursor position with the table (drags always share)
+      </label>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input
+          type="checkbox"
+          checked={prefs.hoverPreview}
+          onChange={(e) => setPrefs({ hoverPreview: e.target.checked })}
+        />
+        Big card preview on hover
+      </label>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         Cursor/drag broadcast rate: {prefs.cursorRate}/s
         <input
           type="range"

@@ -8,6 +8,7 @@ import { faceAt, effectivePT, useCustomDisplay, zRotation } from '../cards';
 export function HoverPreview() {
   const hover = useUI((s) => s.hover);
   const dragging = useUI((s) => s.dragging);
+  const enabled = useGame((s) => s.prefs.hoverPreview);
   const [shown, setShown] = useState<typeof hover>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -24,7 +25,7 @@ export function HoverPreview() {
   }, [hover, dragging]);
 
   const customDisplay = useCustomDisplay(shown?.pool);
-  if (!shown) return null;
+  if (!shown || !enabled) return null;
   const face = shown.pool.sf ? faceAt(shown.pool, shown.rotIndex) : null;
   const img = shown.pool.custom ? customDisplay?.frontFaceImageUrl : face?.img;
   if (!img) return null;
