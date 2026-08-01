@@ -281,13 +281,15 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .hand-strip {
   position: absolute;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Centered in the space between the player HUD (left) and log (right)
+     so hand cards never bury the zone piles. */
+  left: 600px;
+  right: 300px;
   display: flex;
+  justify-content: center;
   align-items: flex-end;
   z-index: 25;
   padding: 0 8px;
-  max-width: 72vw;
 }
 .hand-card {
   width: 108px;

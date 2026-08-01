@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { PoolCard } from '@playmat/shared';
 import { newGuid, parseDecklist } from '@playmat/shared';
 import { useGame } from '../store';
@@ -261,9 +261,29 @@ const QUICK_TOKENS: { label: string; q: string }[] = [
 ];
 
 function CustomPreview({ data }: { data: Record<string, unknown> }) {
-  const preview = useCustomDisplay({ guid: `preview-${JSON.stringify(data)}`, ownerId: '', custom: data });
-  return preview ? <img src={preview.frontFaceImageUrl} style={{ width: 200, borderRadius: 8 }} /> : <div className="subtle">rendering…</div>;
+  // Live preview: re-render 350ms after the last edit. The previous image
+  // stays up while crucible draws the new one, so it never flickers.
+  const json = JSON.stringify(data);
+  const [settled, setSettled] = useState(json);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(json), 350);
+    return () => clearTimeout(t);
+  }, [json]);
+  const preview = useCustomDisplay({ guid: `preview-${settled}`, ownerId: '', custom: JSON.parse(settled) });
+  return preview ? (
+    <img src={preview.frontFaceImageUrl} style={{ width: 220, borderRadius: 8, alignSelf: 'flex-start' }} />
+  ) : (
+    <div className="subtle" style={{ width: 220 }}>rendering…</div>
+  );
 }
+
+const TOKEN_COLORS: { code: string; frame: string }[] = [
+  { code: 'W', frame: 'white' },
+  { code: 'U', frame: 'blue' },
+  { code: 'B', frame: 'black' },
+  { code: 'R', frame: 'red' },
+  { code: 'G', frame: 'green' },
+];
 
 function TokenModal({ at, onClose }: { at: { x: number; y: number }; onClose: () => void }) {
   const session = useGame((s) => s.session);
@@ -271,10 +291,33 @@ function TokenModal({ at, onClose }: { at: { x: number; y: number }; onClose: ()
   const [q, setQ] = useState('');
   const [results, setResults] = useState<ScryfallCard[]>([]);
   const [busy, setBusy] = useState(false);
-  const [custom, setCustom] = useState({ name: 'Token', typeLine: 'Token Creature — Shape', power: '1', toughness: '1', abilities: '' });
-  const [showPreview, setShowPreview] = useState(false);
+  const [custom, setCustom] = useState({ name: 'Token', typeLine: 'Token Creature — Shape', power: '1', toughness: '1', abilities: '', artUrl: '' });
+  const [colors, setColors] = useState<string[]>([]);
 
   const me = session?.playerId ?? '';
+
+  /** Crucible CardData for the custom token. Colors drive the frame accents
+   * (typeLineColor/accentColor), NOT a color indicator. */
+  const buildCustomData = (): Record<string, unknown> => {
+    const data: Record<string, unknown> = {
+      name: custom.name || 'Token',
+      typeLine: custom.typeLine || 'Token',
+      rarity: 'common',
+    };
+    if (custom.abilities.trim()) data.abilities = custom.abilities;
+    if (/creature/i.test(custom.typeLine)) {
+      data.power = custom.power || '1';
+      data.toughness = custom.toughness || '1';
+    }
+    if (custom.artUrl.trim()) data.artUrl = custom.artUrl.trim();
+    if (colors.length > 0) {
+      const frames = TOKEN_COLORS.filter((c) => colors.includes(c.code)).map((c) => c.frame);
+      const value = frames.length === 1 ? frames[0] : frames;
+      data.typeLineColor = value;
+      data.accentColor = value;
+    }
+    return data;
+  };
 
   const search = async (term: string) => {
     setBusy(true);
@@ -295,17 +338,7 @@ function TokenModal({ at, onClose }: { at: { x: number; y: number }; onClose: ()
   };
 
   const spawnCustom = () => {
-    const data: Record<string, unknown> = {
-      name: custom.name || 'Token',
-      typeLine: custom.typeLine || 'Token',
-      rarity: 'common',
-    };
-    if (custom.abilities.trim()) data.abilities = custom.abilities;
-    if (/creature/i.test(custom.typeLine)) {
-      data.power = custom.power || '1';
-      data.toughness = custom.toughness || '1';
-    }
-    actions.createTokens([{ guid: newGuid(), ownerId: me, isToken: true, custom: data }], at);
+    actions.createTokens([{ guid: newGuid(), ownerId: me, isToken: true, custom: buildCustomData() }], at);
     onClose();
   };
 
@@ -355,10 +388,33 @@ function TokenModal({ at, onClose }: { at: { x: number; y: number }; onClose: ()
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
             <input placeholder="Name" value={custom.name} onChange={(e) => setCustom({ ...custom, name: e.target.value })} />
             <input placeholder="Type line" value={custom.typeLine} onChange={(e) => setCustom({ ...custom, typeLine: e.target.value })} />
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input placeholder="P" style={{ width: 60 }} value={custom.power} onChange={(e) => setCustom({ ...custom, power: e.target.value })} />
               <input placeholder="T" style={{ width: 60 }} value={custom.toughness} onChange={(e) => setCustom({ ...custom, toughness: e.target.value })} />
+              <span className="subtle" style={{ marginLeft: 8 }}>Color:</span>
+              {TOKEN_COLORS.map(({ code }) => (
+                <button
+                  key={code}
+                  className="small"
+                  title={`${code} frame accents`}
+                  style={{
+                    padding: 3,
+                    lineHeight: 0,
+                    outline: colors.includes(code) ? '2px solid var(--accent)' : 'none',
+                  }}
+                  onClick={() =>
+                    setColors((cs) => (cs.includes(code) ? cs.filter((c) => c !== code) : [...cs, code]))
+                  }
+                >
+                  <img src={manaSymbolUrl(code)} alt={code} style={{ width: 16, height: 16, display: 'block' }} draggable={false} />
+                </button>
+              ))}
             </div>
+            <input
+              placeholder="Art image URL (optional)"
+              value={custom.artUrl}
+              onChange={(e) => setCustom({ ...custom, artUrl: e.target.value })}
+            />
             <textarea
               placeholder="Rules text (optional)"
               rows={3}
@@ -366,21 +422,10 @@ function TokenModal({ at, onClose }: { at: { x: number; y: number }; onClose: ()
               onChange={(e) => setCustom({ ...custom, abilities: e.target.value })}
             />
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setShowPreview((v) => !v)}>{showPreview ? 'Hide' : 'Preview'}</button>
               <button className="primary" onClick={spawnCustom}>Create token</button>
             </div>
           </div>
-          {showPreview && (
-            <CustomPreview
-              data={{
-                name: custom.name || 'Token',
-                typeLine: custom.typeLine || 'Token',
-                rarity: 'common',
-                ...(custom.abilities.trim() ? { abilities: custom.abilities } : {}),
-                ...(/creature/i.test(custom.typeLine) ? { power: custom.power || '1', toughness: custom.toughness || '1' } : {}),
-              }}
-            />
-          )}
+          <CustomPreview data={buildCustomData()} />
         </div>
       )}
     </Backdrop>

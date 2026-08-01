@@ -6,9 +6,10 @@
 
 /** World is a TABLE x TABLE square. */
 export const TABLE = 2400;
-/** Card width in world units (height = ratio 1.4). */
-export const CARD_W = 100;
-export const CARD_H = 140;
+/** Card width in world units (height = ratio 1.4). Sized so a card is
+ * readable at fit-to-screen zoom (~11 cards across the whole table). */
+export const CARD_W = 220;
+export const CARD_H = 308;
 
 /** Rotation (deg) of a seat's cards in world space: their "up" faces them. */
 export const SEAT_CARD_ANGLE = [0, 180, 270, 90];

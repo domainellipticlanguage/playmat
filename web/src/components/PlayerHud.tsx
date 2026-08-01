@@ -29,6 +29,15 @@ function usePileDrag() {
     if (e.button !== 0) return;
     dragRef.current = { startX: e.clientX, startY: e.clientY, moved: false, img, drop };
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    // Without this the browser starts a native HTML5 image drag, fires
+    // pointercancel, and our pointerup never arrives.
+    e.preventDefault();
+  };
+
+  const cancel = () => {
+    dragRef.current = null;
+    setGhost(null);
+    useUI.getState().setDragging(null);
   };
 
   const move = (e: React.PointerEvent) => {
@@ -72,7 +81,7 @@ function usePileDrag() {
     onClick();
   };
 
-  return { ghost, start, move, end, guardClick };
+  return { ghost, start, move, end, cancel, guardClick };
 }
 
 export function PlayerHud({ player }: { player: SeatRecord }) {
@@ -281,7 +290,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
               const p = pool[c.guid];
               const face = p ? faceAt(p, 0) : null;
               return (
-                <img
+                <img draggable={false}
                   key={c.guid}
                   src={face?.img || CARD_BACK_URL}
                   alt={face?.name}
@@ -311,12 +320,13 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           }
           onPointerMove={pileDrag.move}
           onPointerUp={pileDrag.end}
+          onPointerCancel={pileDrag.cancel}
         >
           {libraryCount > 0 &&
             (topRevealedPool ? (
-              <img src={faceAt(topRevealedPool, 0)?.img || CARD_BACK_URL} alt="top of library (revealed)" />
+              <img draggable={false} src={faceAt(topRevealedPool, 0)?.img || CARD_BACK_URL} alt="top of library (revealed)" />
             ) : (
-              <img src={CARD_BACK_URL} alt="library" />
+              <img draggable={false} src={CARD_BACK_URL} alt="library" />
             ))}
           <span className="pile-count">{libraryCount}</span>
           <span className="pile-label">library</span>
@@ -339,8 +349,9 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           }
           onPointerMove={pileDrag.move}
           onPointerUp={pileDrag.end}
+          onPointerCancel={pileDrag.cancel}
         >
-          {piles.gy[0] && <img src={faceAt(pool[piles.gy[0].guid], piles.gy[0].rotIndex)?.img || CARD_BACK_URL} alt="graveyard top" />}
+          {piles.gy[0] && <img draggable={false} src={faceAt(pool[piles.gy[0].guid], piles.gy[0].rotIndex)?.img || CARD_BACK_URL} alt="graveyard top" />}
           <span className="pile-count">{piles.gy.length}</span>
           <span className="pile-label">grave</span>
         </div>
@@ -362,8 +373,9 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           }
           onPointerMove={pileDrag.move}
           onPointerUp={pileDrag.end}
+          onPointerCancel={pileDrag.cancel}
         >
-          {piles.exile[0] && <img src={faceAt(pool[piles.exile[0].guid], piles.exile[0].rotIndex)?.img || CARD_BACK_URL} alt="exile top" />}
+          {piles.exile[0] && <img draggable={false} src={faceAt(pool[piles.exile[0].guid], piles.exile[0].rotIndex)?.img || CARD_BACK_URL} alt="exile top" />}
           <span className="pile-count">{piles.exile.length}</span>
           <span className="pile-label">exile</span>
         </div>
@@ -385,9 +397,10 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           }
           onPointerMove={pileDrag.move}
           onPointerUp={pileDrag.end}
+          onPointerCancel={pileDrag.cancel}
         >
           {piles.command[0] && (
-            <img src={faceAt(pool[piles.command[0].guid], 0)?.img || CARD_BACK_URL} alt="command zone" />
+            <img draggable={false} src={faceAt(pool[piles.command[0].guid], 0)?.img || CARD_BACK_URL} alt="command zone" />
           )}
           <span className="pile-count">{piles.command.length}</span>
           <span className="pile-label">command</span>
@@ -401,7 +414,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         </div>
       </div>
       {pileDrag.ghost && (
-        <img
+        <img draggable={false}
           src={pileDrag.ghost.img}
           style={{
             position: 'fixed',

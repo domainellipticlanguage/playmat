@@ -365,3 +365,8 @@ export function nextSeq(sk: string): number {
   const cur = useGame.getState().seqs[sk];
   return (cur?.seq ?? 0) + 1;
 }
+
+// Dev-only escape hatch for debugging in the browser console.
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  (window as unknown as Record<string, unknown>).__game = useGame;
+}
