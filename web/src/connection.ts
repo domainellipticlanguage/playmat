@@ -21,6 +21,7 @@ let client: EventsClient | null = null;
 let presenceTimer: ReturnType<typeof setInterval> | null = null;
 let pruneTimer: ReturnType<typeof setInterval> | null = null;
 let hiddenDebounce: ReturnType<typeof setTimeout> | null = null;
+let storeUnsub: (() => void) | null = null;
 let lastPersistedHiddenSeq = -1;
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -90,6 +91,24 @@ export function sendEphemeral(ev: EphemeralEvent): void {
 
 export async function startSession(session: StoredSession): Promise<void> {
   stopSession();
+  // Fresh room, fresh state — nothing may bleed over from a previous session.
+  useGame.setState({
+    players: [],
+    playerStates: {},
+    room: null,
+    pool: {},
+    cards: {},
+    seqs: {},
+    poolImports: {},
+    hidden: { library: [], hand: [] },
+    hiddenSeq: 0,
+    log: [],
+    cursors: {},
+    drags: {},
+    presence: {},
+    selection: [],
+    setupGameId: null,
+  });
   const store = useGame.getState();
   store.setSession(session);
   persisted.patch({ lastSession: session, name: session.name });
@@ -147,7 +166,7 @@ export async function startSession(session: StoredSession): Promise<void> {
 
   // Persist hidden zones (debounced) whenever they change, and run my
   // per-game setup when the game epoch changes (peer reset / new game).
-  useGame.subscribe((s, prev) => {
+  storeUnsub = useGame.subscribe((s, prev) => {
     if (s.hiddenSeq !== prev.hiddenSeq) {
       if (hiddenDebounce) clearTimeout(hiddenDebounce);
       hiddenDebounce = setTimeout(() => persistHiddenNow(session), 600);
@@ -182,6 +201,9 @@ export function stopSession(): void {
   if (pruneTimer) clearInterval(pruneTimer);
   if (hiddenDebounce) clearTimeout(hiddenDebounce);
   presenceTimer = pruneTimer = hiddenDebounce = null;
+  storeUnsub?.();
+  storeUnsub = null;
+  lastPersistedHiddenSeq = -1;
   client?.close();
   client = null;
 }

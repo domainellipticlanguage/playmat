@@ -139,6 +139,7 @@ export function Battlefield() {
         if (c) offsets[g] = { dx: c.x - world.x, dy: c.y - world.y };
       }
       dragRef.current = { guids, offsets, startScreen: local, moved: false };
+      useUI.getState().setDragging(guid);
       viewportRef.current!.setPointerCapture(e.pointerId);
       e.preventDefault();
       return;
@@ -189,6 +190,7 @@ export function Battlefield() {
 
     const drag = dragRef.current;
     dragRef.current = null;
+    useUI.getState().setDragging(null);
 
     if (drag) {
       const st = useGame.getState();

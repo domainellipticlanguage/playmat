@@ -249,7 +249,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           <span className="pile-label">command</span>
         </div>
 
-        <div className="pile" data-drop={isMe ? 'hand:' : `hand:${pid}`} title={`${player.name}'s hand`}
+        <div className="pile" data-drop={`hand:${pid}`} title={`${player.name}'s hand`}
           style={{ borderStyle: 'solid' }}>
           <span className="pile-count">{handCount}</span>
           <span className="pile-label">hand</span>

@@ -261,7 +261,7 @@ const QUICK_TOKENS: { label: string; q: string }[] = [
 ];
 
 function CustomPreview({ data }: { data: Record<string, unknown> }) {
-  const preview = useCustomDisplay({ guid: `preview-${JSON.stringify(data).length}`, ownerId: '', custom: data });
+  const preview = useCustomDisplay({ guid: `preview-${JSON.stringify(data)}`, ownerId: '', custom: data });
   return preview ? <img src={preview.frontFaceImageUrl} style={{ width: 200, borderRadius: 8 }} /> : <div className="subtle">rendering…</div>;
 }
 
@@ -635,5 +635,3 @@ export function ModalHost() {
       return null;
   }
 }
-
-export { TABLE };

@@ -6,12 +6,13 @@
  * "__BOARD_TABLE__" is substituted with the real table name at synth time
  * (APPSYNC_JS has no environment variables).
  */
-import { util, runtime } from '@aws-appsync/utils';
+import { util } from '@aws-appsync/utils';
 import * as ddb from '@aws-appsync/utils/dynamodb';
 
 const TABLE = '__BOARD_TABLE__';
 
 // Keep in sync with shared/src/protocol.ts subjectKey().
+// (APPSYNC_JS runtime: no while loops — pad with slice instead.)
 function subjectKey(ev) {
   if (ev.t === 'card' && ev.card && ev.card.guid) return 'card#' + ev.card.guid;
   if (ev.t === 'player' && ev.player && ev.player.playerId) return 'player#' + ev.player.playerId;
@@ -19,8 +20,7 @@ function subjectKey(ev) {
   if (ev.t === 'room') return 'room';
   if (ev.t === 'seats') return 'seats';
   if (ev.t === 'log') {
-    let s = '' + (ev.seq || 0);
-    while (s.length < 9) s = '0' + s;
+    const s = ('000000000' + (ev.seq || 0)).slice(-9);
     return 'log#' + s + '#' + ev.by;
   }
   return null;
@@ -48,26 +48,27 @@ export const onPublish = {
     const validIds = [];
     for (const e of ctx.events) {
       const ev = e.payload;
-      if (!ev || !ev.t) continue;
       // S-3: players may only publish events attributed to themselves.
-      if (!auth.server && ev.by !== auth.playerId) continue;
-      const sk = subjectKey(ev);
-      if (!sk) continue;
-      items.push({
-        roomCode: auth.roomCode,
-        sk: sk,
-        seq: ev.seq || 0,
-        by: ev.by || '',
-        g: ev.g || '',
-        t: ev.t,
-        ev: ev,
-        expireAt: expireAt,
-      });
-      validIds.push(e.id);
+      const attributed = ev && ev.t && (auth.server || ev.by === auth.playerId);
+      const sk = attributed ? subjectKey(ev) : null;
+      if (sk) {
+        items.push({
+          roomCode: auth.roomCode,
+          sk: sk,
+          seq: ev.seq || 0,
+          by: ev.by || '',
+          g: ev.g || '',
+          t: ev.t,
+          ev: ev,
+          expireAt: expireAt,
+        });
+        validIds.push(e.id);
+      }
     }
     ctx.stash.validIds = validIds;
     if (items.length === 0) {
-      return runtime.earlyReturn([]);
+      // Every event was misattributed (S-3) — reject the publish outright.
+      util.error('No publishable events (attribution mismatch)');
     }
     const tables = {};
     tables[TABLE] = items;

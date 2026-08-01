@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8c76a"/>
+      <stop offset="0.55" stop-color="#c9a34a"/>
+      <stop offset="1" stop-color="#8a6b2a"/>
+    </linearGradient>
+    <radialGradient id="wood" cx="0.5" cy="0.42" r="0.75">
+      <stop offset="0" stop-color="#3d2f1d"/>
+      <stop offset="1" stop-color="#1c140c"/>
+    </radialGradient>
+  </defs>
+  <!-- round table seen from above; four seats as card sleeves at N/S/E/W -->
+  <circle cx="160" cy="160" r="150" fill="url(#wood)" stroke="url(#gold)" stroke-width="5"/>
+  <circle cx="160" cy="160" r="128" fill="none" stroke="#c9a34a" stroke-width="1.4" opacity="0.5"/>
+  <g fill="#241a0f" stroke="url(#gold)" stroke-width="2.6">
+    <rect x="141" y="30"  width="38" height="52" rx="5"/>
+    <rect x="141" y="238" width="38" height="52" rx="5"/>
+    <rect x="30"  y="141" width="52" height="38" rx="5"/>
+    <rect x="238" y="141" width="52" height="38" rx="5"/>
+  </g>
+  <!-- compass star -->
+  <g fill="url(#gold)">
+    <path d="M160 100 l 10 50 -10 14 -10 -14 z"/>
+    <path d="M160 220 l 10 -50 -10 -14 -10 14 z"/>
+    <path d="M100 160 l 50 10 14 -10 -14 -10 z"/>
+    <path d="M220 160 l -50 10 -14 -10 14 -10 z"/>
+  </g>
+  <circle cx="160" cy="160" r="10" fill="#14100c" stroke="url(#gold)" stroke-width="3"/>
+  <text x="160" y="308" text-anchor="middle" font-family="Iowan Old Style, Palatino, Georgia, serif" font-size="30" font-weight="bold" letter-spacing="9" fill="url(#gold)">PLAYMAT</text>
+</svg>

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="200" viewBox="0 0 640 200">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8c76a"/>
+      <stop offset="0.5" stop-color="#c9a34a"/>
+      <stop offset="1" stop-color="#8a6b2a"/>
+    </linearGradient>
+    <linearGradient id="cardface" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b2d1c"/>
+      <stop offset="1" stop-color="#241a0f"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="200" fill="#14100c"/>
+  <!-- tilted card standing in for the A -->
+  <g transform="translate(346,97) rotate(8)">
+    <rect x="-26" y="-58" width="52" height="74" rx="6" fill="url(#cardface)" stroke="url(#gold)" stroke-width="3"/>
+    <rect x="-18" y="-50" width="36" height="26" rx="3" fill="none" stroke="#c9a34a" stroke-width="1.6" opacity="0.75"/>
+    <path d="M 0 -6 l 7 12 h -14 z" fill="#c9a34a"/>
+    <line x1="-16" y1="14" x2="16" y2="14" stroke="#c9a34a" stroke-width="1.6" opacity="0.6"/>
+  </g>
+  <text x="316" y="120" text-anchor="end" font-family="Iowan Old Style, Palatino, Georgia, serif" font-size="84" font-weight="bold" letter-spacing="6" fill="url(#gold)">PL<tspan dx="1">A</tspan>YM</text>
+  <text x="380" y="120" text-anchor="start" font-family="Iowan Old Style, Palatino, Georgia, serif" font-size="84" font-weight="bold" letter-spacing="6" fill="url(#gold)">T</text>
+  <text x="320" y="158" text-anchor="middle" font-family="Iowan Old Style, Palatino, Georgia, serif" font-size="17" letter-spacing="8" fill="#9a8c72">A SHARED KITCHEN TABLE</text>
+</svg>

@@ -10,6 +10,7 @@ export function Hand() {
   const hand = useGame((s) => s.hidden.hand);
   const pool = useGame((s) => s.pool);
   const cards = useGame((s) => s.cards);
+  const me = useGame((s) => s.session?.playerId);
   const [ghost, setGhost] = useState<{ guid: string; x: number; y: number } | null>(null);
   const dragRef = useRef<{ guid: string; startX: number; startY: number; moved: boolean } | null>(null);
 
@@ -23,7 +24,10 @@ export function Hand() {
   const onPointerMove = (e: React.PointerEvent) => {
     const d = dragRef.current;
     if (!d) return;
-    if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 6) d.moved = true;
+    if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 6) {
+      if (!d.moved) useUI.getState().setDragging(d.guid);
+      d.moved = true;
+    }
     if (d.moved) setGhost({ guid: d.guid, x: e.clientX, y: e.clientY });
   };
 
@@ -31,6 +35,7 @@ export function Hand() {
     const d = dragRef.current;
     dragRef.current = null;
     setGhost(null);
+    useUI.getState().setDragging(null);
     if (!d || !d.moved) return;
     const dropEl = document.elementFromPoint(e.clientX, e.clientY);
     const zoneTarget = dropEl?.closest('[data-drop]') as HTMLElement | null;
@@ -73,7 +78,7 @@ export function Hand() {
 
   return (
     <>
-      <div className="hand-strip" data-drop="hand:">
+      <div className="hand-strip" data-drop={`hand:${me ?? ''}`}>
         {hand.map((guid) => {
           const p = pool[guid];
           const face = p ? faceAt(p, 0) : null;
