@@ -296,8 +296,8 @@ function TokenModal({ at, onClose }: { at: { x: number; y: number }; onClose: ()
 
   const me = session?.playerId ?? '';
 
-  /** Crucible CardData for the custom token. Colors drive the frame accents
-   * (typeLineColor/accentColor), NOT a color indicator. */
+  /** Crucible CardData for the custom token. Colors drive typeLineColor
+   * only — no accentColor, no color indicator. */
   const buildCustomData = (): Record<string, unknown> => {
     const data: Record<string, unknown> = {
       name: custom.name || 'Token',
@@ -312,9 +312,7 @@ function TokenModal({ at, onClose }: { at: { x: number; y: number }; onClose: ()
     if (custom.artUrl.trim()) data.artUrl = custom.artUrl.trim();
     if (colors.length > 0) {
       const frames = TOKEN_COLORS.filter((c) => colors.includes(c.code)).map((c) => c.frame);
-      const value = frames.length === 1 ? frames[0] : frames;
-      data.typeLineColor = value;
-      data.accentColor = value;
+      data.typeLineColor = frames.length === 1 ? frames[0] : frames;
     }
     return data;
   };
