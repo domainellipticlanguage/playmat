@@ -13,49 +13,52 @@ import { renderCard, toDisplayCard } from 'mtg-crucible';
 import type { CardData, MtgCardDisplayData, Rotation } from 'mtg-crucible';
 import type { PoolCard, PoolFace } from '@playmat/shared';
 
-/** Scryfall layout -> crucible template + linkType for rotation math. */
-function layoutToCrucible(layout: string): Partial<CardData> {
-  switch (layout) {
-    case 'transform':
-      return { cardTemplate: 'transform_front', linkType: 'transform', linkedCard: { name: 'b' } };
-    case 'modal_dfc':
-      return { cardTemplate: 'mdfc_front', linkType: 'modal_dfc', linkedCard: { name: 'b' } };
-    case 'flip':
-      return { cardTemplate: 'flip', linkType: 'flip', linkedCard: { name: 'b' } };
-    case 'split':
-      return { cardTemplate: 'split', linkType: 'split', linkedCard: { name: 'b' } };
-    case 'adventure':
-      return { cardTemplate: 'adventure', linkType: 'adventure', linkedCard: { name: 'b' } };
-    case 'battle':
-      return { cardTemplate: 'battle', linkType: 'transform', linkedCard: { name: 'b' } };
-    case 'room':
-      return { cardTemplate: 'room', linkType: 'room', linkedCard: { name: 'b' } };
-    default:
-      return { cardTemplate: 'standard' };
-  }
+/**
+ * A card's Scryfall fields as crucible CardData. Deliberately NO layout
+ * mapping: crucible infers template and linkType from the fields themselves
+ * (type line, mana costs, rules text, battleDefense), which is more reliable
+ * than Scryfall's layout labels — e.g. Scryfall files battles under
+ * "transform" and aftermath under "split".
+ */
+function crucibleData(pool: PoolCard): CardData {
+  const face = (f: PoolFace): CardData => ({
+    name: f.name,
+    manaCost: f.mana,
+    typeLine: f.type,
+    abilities: f.oracle,
+    power: f.power,
+    toughness: f.toughness,
+    startingLoyalty: f.loyalty,
+    battleDefense: f.defense,
+  });
+  const [front, back] = pool.sf!.faces;
+  const data: CardData = front ? face(front) : { name: pool.sf!.name };
+  if (back) data.linkedCard = face(back);
+  return data;
 }
 
 const rotationsCache = new Map<string, Rotation[]>();
+const IDENTITY: Rotation[] = [{ x: 0, y: 0, z: 0 }];
 
 /**
- * Synced rotation states for a card. Battles drop the leading null rotation
+ * Synced rotation states for a card. Battles drop the leading upright state
  * so they sit sideways by default (they enter the battlefield tilted).
  */
 export function cardRotations(pool: PoolCard): Rotation[] {
-  const key = pool.sf ? `${pool.sf.layout}` : pool.custom ? 'custom' : 'standard';
+  if (!pool.sf) return IDENTITY;
+  const key = pool.sf.id;
   const cached = rotationsCache.get(key);
   if (cached) return cached;
 
   let rotations: Rotation[];
-  if (pool.sf) {
-    rotations = computeRotations({ name: pool.sf.name, ...layoutToCrucible(pool.sf.layout) });
-    if (pool.sf.layout === 'battle') {
+  try {
+    const normalized = normalizeCard(crucibleData(pool));
+    rotations = computeRotations(normalized);
+    if (normalized.cardTemplate === 'battle') {
       rotations = rotations.filter((r, i) => !(i === 0 && r.x === 0 && r.y === 0 && r.z === 0));
     }
-    // Aftermath detection: Scryfall calls these "split"; the second half reads
-    // sideways-left. computeRotations already handled split; good enough.
-  } else {
-    rotations = [{ x: 0, y: 0, z: 0 }];
+  } catch {
+    rotations = IDENTITY;
   }
   rotationsCache.set(key, rotations);
   return rotations;

@@ -34,6 +34,10 @@ export interface Prefs {
   /** Teaching mode: continuously reveal my hand to the table. */
   showHandToTable: boolean;
   defaultLife: number;
+  /** My identity color: a PLAYER_PALETTE name. Unset = seat default. */
+  playerColor?: string;
+  /** My playmat background: 'color' | 'commander' | 'url:…'. Unset = 'color'. */
+  playmatStyle?: string;
 }
 
 export interface RemoteCursor {

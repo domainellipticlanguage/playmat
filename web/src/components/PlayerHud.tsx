@@ -4,6 +4,7 @@ import { useGame } from '../store';
 import { useUI } from '../uiStore';
 import * as actions from '../actions';
 import { liveView, relativeEdge, screenToWorld } from '../view';
+import { paletteColor } from '../colors';
 import { CardView, DragGhost } from './CardView';
 
 const PLAYER_COUNTERS = ['poison', 'energy', 'experience'];
@@ -276,6 +277,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         </button>
         <div className="hud-mini">
           <span className={`presence ${presenceClass}`} title={presenceClass || 'not seen yet'} />
+          <span className="player-chip" style={{ background: paletteColor(state.color, player.seat).hex }} />
           <b>{player.name}</b>
           {room?.turnPlayerId === pid && <span className="turn-badge">▶ turn</span>}
           <span className="mini-stat" title="life">♥ {state.life}</span>
@@ -294,6 +296,11 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
       <div className="who">
         <div className="name">
           <span className={`presence ${presenceClass}`} title={presenceClass || 'not seen yet'} />
+          <span
+            className="player-chip"
+            title={`${player.name}'s color — their playmat and card rings`}
+            style={{ background: paletteColor(state.color, player.seat).hex }}
+          />
           {player.name} {isMe && <span style={{ color: 'var(--ink-dim)' }}>(you)</span>}
           {room?.turnPlayerId === pid && (
             <span className="turn-badge" title={isMe ? 'Your turn' : `${player.name}'s turn`}>

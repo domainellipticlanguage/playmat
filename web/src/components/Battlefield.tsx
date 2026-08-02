@@ -1,24 +1,79 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { CardState, ZoneName } from '@playmat/shared';
+import type { CardState, PlayerState, PoolCard, ZoneName } from '@playmat/shared';
 import { useGame } from '../store';
 import { useUI } from '../uiStore';
 import { sendEphemeral } from '../connection';
 import * as actions from '../actions';
 import { TableCard } from './TableCard';
+import { paletteColor, playmatImageUrl } from '../colors';
 import {
   CARD_H,
   CARD_W,
   TABLE,
   liveView,
+  matRect,
   screenToWorld,
   seatAngle,
   viewRotation,
   worldToScreen,
+  type MatRect,
   type ViewTransform,
 } from '../view';
 
-const OWNER_COLORS = ['#c9a34a', '#5f8dc9', '#b0483c', '#5d8a4e'];
+/**
+ * One player's mat: a rounded rect in world coordinates, their color on the
+ * border, their pattern/art as the surface. The art is rendered in a child
+ * div rotated to the seat's orientation (dims swapped for east/west) so a
+ * commander portrait faces its player.
+ */
+function Playmat({
+  rect,
+  seat,
+  ps,
+  name,
+  pool,
+}: {
+  rect: MatRect;
+  seat: number;
+  ps: PlayerState | undefined;
+  name: string;
+  pool: Record<string, PoolCard>;
+}) {
+  const w = rect.x1 - rect.x0;
+  const h = rect.y1 - rect.y0;
+  const angle = seatAngle(seat);
+  const sideways = angle === 90 || angle === 270;
+  const color = paletteColor(ps?.color, seat);
+  const art = playmatImageUrl(ps, seat, pool);
+  return (
+    <div
+      className="playmat"
+      style={{
+        left: rect.x0,
+        top: rect.y0,
+        width: w,
+        height: h,
+        borderColor: `${color.hex}99`,
+        boxShadow: `0 0 60px ${color.hex}26 inset`,
+      }}
+    >
+      <div
+        className="playmat-art"
+        style={{
+          width: sideways ? h : w,
+          height: sideways ? w : h,
+          transform: `translate(-50%, -50%) rotate(${angle}deg)`,
+          backgroundImage: `url(${art})`,
+        }}
+      >
+        <span className="playmat-name" style={{ color: `${color.hex}cc` }}>
+          {name}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 interface DragState {
   guids: string[];
@@ -34,6 +89,7 @@ export function Battlefield() {
   const cards = useGame((s) => s.cards);
   const pool = useGame((s) => s.pool);
   const players = useGame((s) => s.players);
+  const playerStates = useGame((s) => s.playerStates);
   const cursors = useGame((s) => s.cursors);
   const drags = useGame((s) => s.drags);
   const selection = useGame((s) => s.selection);
@@ -82,6 +138,10 @@ export function Battlefield() {
     for (const p of players) m.set(p.playerId, p.seat);
     return m;
   }, [players]);
+
+  /** A player's display color (their pick, else their seat's default). */
+  const colorOf = (pid: string) =>
+    paletteColor(playerStates[pid]?.color, seatOf.get(pid) ?? 0).hex;
 
   const battlefieldCards = useMemo(
     () => Object.values(cards).filter((c) => c.zone === 'battlefield'),
@@ -308,7 +368,7 @@ export function Battlefield() {
       remoteDrag={drags[c.guid] && !dragPositions[c.guid] ? drags[c.guid] : null}
       selected={selection.includes(c.guid)}
       faceAngleOverride={faceAngleOverride}
-      ownerColor={OWNER_COLORS[seatOf.get(c.ownerId) ?? 0] ?? '#888'}
+      ownerColor={colorOf(c.ownerId)}
     />
   );
 
@@ -340,6 +400,16 @@ export function Battlefield() {
             backgroundImage: 'var(--table-image, url(/table.jpg))',
           }}
         />
+        {players.map((p) => (
+          <Playmat
+            key={p.playerId}
+            rect={matRect(p.seat, (q) => players.some((o) => o.seat === q))}
+            seat={p.seat}
+            ps={playerStates[p.playerId]}
+            name={p.name}
+            pool={pool}
+          />
+        ))}
         {battlefieldCards.filter((c) => !dragPositions[c.guid]).map(renderCard)}
         {Object.entries(cursors).map(([pid, cur]) => (
           <div
@@ -347,7 +417,7 @@ export function Battlefield() {
             className="cursor-dot"
             style={{ transform: `translate(${cur.x}px, ${cur.y}px) rotate(${-view.theta}deg) scale(${1 / view.k})` }}
           >
-            <div className="dot" style={{ background: OWNER_COLORS[seatOf.get(pid) ?? 0] ?? '#aaa' }} />
+            <div className="dot" style={{ background: colorOf(pid) }} />
             <div className="label">{cur.name}</div>
           </div>
         ))}

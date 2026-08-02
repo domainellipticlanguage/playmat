@@ -74,13 +74,6 @@ export function Table() {
     goHome();
   };
 
-  const nextSeatPlayer = () => {
-    const seated = [...players].sort((a, b) => a.seat - b.seat);
-    if (!seated.length) return null;
-    const idx = seated.findIndex((p) => p.playerId === room?.turnPlayerId);
-    return seated[(idx + 1) % seated.length];
-  };
-
   const ui = useUI.getState();
 
   /** Open a topbar dropdown, anchored under the button that was clicked. */
@@ -109,13 +102,6 @@ export function Table() {
   ];
   const gameItems = [
     { label: 'Mulligan — hand back, draw 7', action: () => actions.mulligan() },
-    {
-      label: 'Pass the turn marker',
-      action: () => {
-        const next = nextSeatPlayer();
-        if (next) actions.passTurn(next.playerId);
-      },
-    },
     sep,
     { label: iHaveDeck ? 'Re-import deck…' : 'Import deck…', action: () => ui.openModal({ kind: 'import' }) },
     sep,
@@ -171,7 +157,10 @@ export function Table() {
             <button className="small" disabled={!iHaveDeck} onClick={() => actions.untapAll()} title="Untap all (U)">
               Untap
             </button>
-            <button className="small" disabled={!iHaveDeck} onClick={() => actions.takeTurn()} title="Untap, upkeep, draw">
+            {/* Free-for-all by design: whoever's turn it is grabs it. "I'm
+                done" happens out of band (in person / voice), so there is no
+                pass-the-turn — the next player just takes it. */}
+            <button className="small" onClick={() => actions.takeTurn()} title="Untap, upkeep, draw — claims the turn">
               Take turn ▸
             </button>
             <button className="small bar-wide" onClick={() => ui.openModal({ kind: 'tokens', at: centerDropSpot() })}>

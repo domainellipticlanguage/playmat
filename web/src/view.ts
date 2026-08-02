@@ -36,38 +36,94 @@ export function relativeEdge(seat: number, mySeat: number | null): EdgeName {
   }
 }
 
-/** Home battlefield drop position for a seat (in front of their edge). */
-export function homePosition(seat: number, slot = 0): { x: number; y: number } {
-  const c = TABLE / 2;
-  const depth = TABLE * 0.30; // distance from center toward the seat's edge
-  const lateral = (slot % 7 - 3) * (CARD_W * 1.2);
-  switch (seat) {
-    case 0: return { x: c + lateral, y: c + depth };
-    case 1: return { x: c - lateral, y: c - depth };
-    case 2: return { x: c + depth, y: c + lateral };
-    default: return { x: c - depth, y: c - lateral };
-  }
+// ---------------------------------------------------------------------------
+// Playmats: one rounded-rect control region per occupied seat.
+// ---------------------------------------------------------------------------
+
+export interface MatRect {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
 }
 
-/** Columns per auto-placement row (they span the seat's home edge). */
-export const HOME_COLS = 7;
+/** Margin from the table edge to a mat. */
+const MAT_MARGIN = 90;
+/** Half-size of the neutral center square no mat ever covers (the DMZ). */
+const MAT_DMZ = 300;
+/** Visual+functional inset per mat, so neighboring mats never touch. */
+const MAT_INSET = 14;
 
 /**
- * Auto-placement slot grid for "Play" without an explicit drop point:
- * row 0 (lands) hugs the seat's edge, row 1 (everything else) sits toward
- * the middle of the table. Columns run across the home edge.
+ * The mat for a seat, given which seats are occupied. Pinwheel layout:
+ * every seat always owns the table corner on its front-LEFT (SW for seat 0,
+ * NE for 1, SE for 2, NW for 3), and extends into its front-right corner
+ * only when the neighboring seat on that side is empty. Mats therefore
+ * never overlap for any occupancy, every player gets the same shape in a
+ * full game, and 2-player face-to-face games get full-width mats.
  */
-export function homeSlot(seat: number, row: 0 | 1, col: number): { x: number; y: number } {
+export function matRect(seat: number, occupied: (s: number) => boolean): MatRect {
+  const m = MAT_MARGIN;
   const c = TABLE / 2;
-  // 0.34 keeps the land row clear of the seat's own tray at fit-to-screen zoom.
-  const depth = TABLE * (row === 0 ? 0.34 : 0.19);
-  const lateral = (col - (HOME_COLS - 1) / 2) * (CARD_W * 1.15);
+  const d = MAT_DMZ;
+  const T = TABLE;
+  let r: MatRect;
   switch (seat) {
-    case 0: return { x: c + lateral, y: c + depth };
-    case 1: return { x: c - lateral, y: c - depth };
-    case 2: return { x: c + depth, y: c + lateral };
-    default: return { x: c - depth, y: c - lateral };
+    case 0: r = { x0: m, x1: occupied(2) ? c + d : T - m, y0: c + d, y1: T - m }; break;
+    case 1: r = { x0: occupied(3) ? c - d : m, x1: T - m, y0: m, y1: c - d }; break;
+    case 2: r = { x0: c + d, x1: T - m, y0: occupied(1) ? c - d : m, y1: T - m }; break;
+    default: r = { x0: m, x1: c - d, y0: m, y1: occupied(0) ? c + d : T - m }; break;
   }
+  return { x0: r.x0 + MAT_INSET, y0: r.y0 + MAT_INSET, x1: r.x1 - MAT_INSET, y1: r.y1 - MAT_INSET };
+}
+
+/** Which occupied seat's mat contains this world point, if any. */
+export function matSeatAt(x: number, y: number, seats: number[]): number | null {
+  for (const s of seats) {
+    const r = matRect(s, (q) => seats.includes(q));
+    if (x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) return s;
+  }
+  return null;
+}
+
+/**
+ * Auto-placement slot centers inside a mat, for "Play" without an explicit
+ * drop point: row 0 (lands) hugs the seat's own edge, row 1 sits toward the
+ * table center. Slots run across the mat's lateral axis; the count adapts to
+ * the mat's width, so 2-player mats get more columns than 4-player mats.
+ *
+ * Returned in FILL order, which staggers out from the middle — the first
+ * card lands mid-mat and later ones alternate right/left of it — so a board
+ * grows from the center instead of marching in from one end.
+ */
+export function matSlots(seat: number, mat: MatRect, row: 0 | 1): { x: number; y: number }[] {
+  const pad = 28;
+  const spacing = CARD_W * 1.15;
+  // Distance from the seat's own edge of the mat to the row's card centers.
+  // E/W cards sit rotated 90°, so depth always spans the card's HEIGHT.
+  const depth = pad + CARD_H / 2 + (row === 0 ? 0 : CARD_H + 36);
+  const horizontal = seat === 0 || seat === 1; // lateral axis = x
+  const lo = horizontal ? mat.x0 : mat.y0;
+  const hi = horizontal ? mat.x1 : mat.y1;
+  const n = Math.max(1, Math.floor((hi - lo - pad * 2) / spacing));
+  const start = (lo + hi) / 2 - ((n - 1) * spacing) / 2;
+  const fixed =
+    seat === 0 ? mat.y1 - depth :
+    seat === 1 ? mat.y0 + depth :
+    seat === 2 ? mat.x1 - depth :
+    mat.x0 + depth;
+  const at = (i: number) => {
+    const lateral = start + i * spacing;
+    return horizontal ? { x: lateral, y: fixed } : { x: fixed, y: lateral };
+  };
+  // Center-out order over the fixed grid: mid, mid+1, mid-1, mid+2, …
+  const mid = Math.floor((n - 1) / 2);
+  const order: number[] = [];
+  for (let step = 0; order.length < n; step++) {
+    if (mid + step < n) order.push(mid + step);
+    if (step > 0 && mid - step >= 0) order.push(mid - step);
+  }
+  return order.map(at);
 }
 
 export interface ViewTransform {

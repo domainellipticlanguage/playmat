@@ -20,6 +20,7 @@ vi.mock('./connection', () => ({
 
 const { useGame } = await import('./store');
 const actions = await import('./actions');
+const { matRect, matSeatAt, matSlots } = await import('./view');
 
 const ME = 'me-player';
 const FOE = 'foe-player';
@@ -291,14 +292,21 @@ describe('game state', () => {
     let s = useGame.getState();
     expect(s.room?.turnPlayerId).toBe(ME);
     expect(s.room?.turn).toBe(1);
-    // A second consecutive take (e.g. after being passed the marker) is the
-    // same turn — no double count.
+    // Re-taking your own turn (double click) is the same turn — no double count.
     actions.takeTurn();
     expect(useGame.getState().room?.turn).toBe(1);
-    actions.passTurn(FOE);
+    // Free-for-all: a peer just takes the next turn (there is no pass step).
     s = useGame.getState();
-    expect(s.room?.turnPlayerId).toBe(FOE);
-    expect(s.room?.turn).toBe(2);
+    s.applyStateEvent({
+      t: 'room', g: s.room!.gameId, by: FOE, seq: s.seqs['room'].seq + 1,
+      room: { gameId: s.room!.gameId, turnPlayerId: FOE, turn: (s.room!.turn ?? 0) + 1 },
+    });
+    expect(useGame.getState().room?.turn).toBe(2);
+    // Taking it back is a fresh turn again.
+    actions.takeTurn();
+    s = useGame.getState();
+    expect(s.room?.turnPlayerId).toBe(ME);
+    expect(s.room?.turn).toBe(3);
   });
 
   it('lands slot into the edge row, spells into the center row, taken slots skip', () => {
@@ -322,6 +330,47 @@ describe('game state', () => {
     const seatDepth = (p: { x: number; y: number }) => Math.hypot(p.x - 1200, p.y - 1200);
     // Lands sit farther from the table center (closer to the owner's edge).
     expect(seatDepth(p1)).toBeGreaterThan(seatDepth(ps));
+  });
+
+  it('mats never overlap and never cover the DMZ, for any seat occupancy', () => {
+    for (let mask = 1; mask < 16; mask++) {
+      const seats = [0, 1, 2, 3].filter((s) => mask & (1 << s));
+      const rects = seats.map((s) => matRect(s, (q) => seats.includes(q)));
+      for (let i = 0; i < rects.length; i++) {
+        for (let j = i + 1; j < rects.length; j++) {
+          const a = rects[i];
+          const b = rects[j];
+          const overlap = a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+          expect(overlap, `seats ${seats.join(',')}: mats ${seats[i]} and ${seats[j]} overlap`).toBe(false);
+        }
+      }
+      // The table center stays neutral ground.
+      expect(matSeatAt(1200, 1200, seats)).toBeNull();
+      // Every mat is big enough for its two slot rows.
+      for (const s of seats) {
+        expect(matSlots(s, matRect(s, (q) => seats.includes(q)), 0).length).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it('dropping a card on a mat claims control for that mat\'s player; the DMZ does not', () => {
+    const guid = useGame.getState().hidden.library[0];
+    const seats = [0, 1];
+    // Deep inside FOE's (seat 1) mat:
+    const foeSpot = matSlots(1, matRect(1, (q) => seats.includes(q)), 1)[0];
+    actions.moveCard(guid, { zone: 'battlefield', x: foeSpot.x, y: foeSpot.y });
+    expect(useGame.getState().cards[guid].controllerId).toBe(FOE);
+    // Dragging to the DMZ keeps the current controller…
+    actions.moveCardsGroup([{ guid, x: 1200, y: 1200 }]);
+    expect(useGame.getState().cards[guid].controllerId).toBe(FOE);
+    // …and onto my own mat takes it back (with a log line).
+    const mySpot = matSlots(0, matRect(0, (q) => seats.includes(q)), 1)[0];
+    actions.moveCardsGroup([{ guid, x: mySpot.x, y: mySpot.y }]);
+    expect(useGame.getState().cards[guid].controllerId).toBe(ME);
+    expect(useGame.getState().log.some((l) => /now controls/.test(l.text))).toBe(true);
+    // Leaving the battlefield resets control to the owner.
+    actions.moveCard(guid, { zone: 'graveyard' });
+    expect(useGame.getState().cards[guid].controllerId).toBe(ME);
   });
 
   it('commander damage ticks life in the same event', () => {

@@ -101,6 +101,18 @@ export interface PlayerState {
    * Optional so snapshots written before this field still load.
    */
   showHandToTable?: boolean;
+  /**
+   * Identity color: a PLAYER_PALETTE name ('purple', 'orange', …) — deliberately
+   * never a mana color. Auto-assigned from the seat; the player may change it.
+   * Drives the ownership ring, cursor dot, and default playmat pattern.
+   * Optional so snapshots written before this field still load.
+   */
+  color?: string;
+  /**
+   * Playmat background choice: 'color' (the stock pattern for `color`),
+   * 'commander' (this player's commander art crop), or 'url:<https image url>'.
+   */
+  playmat?: string;
 }
 
 export interface RoomState {

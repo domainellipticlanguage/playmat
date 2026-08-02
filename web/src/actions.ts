@@ -16,8 +16,9 @@ import {
   shuffled,
 } from '@playmat/shared';
 import { sendState, flushHidden } from './connection';
-import { nextSeq, useGame } from './store';
-import { CARD_H, CARD_W, HOME_COLS, homeSlot } from './view';
+import { nextSeq, useGame, cardName } from './store';
+import { CARD_H, CARD_W, matRect, matSeatAt, matSlots } from './view';
+import { seatDefaultColor } from './colors';
 
 // ---------------------------------------------------------------------------
 // Event construction helpers
@@ -44,10 +45,21 @@ function playerEvent(player: PlayerState): StateEvent {
   return { t: 'player', g: gameId, by: me, seq: nextSeq(`player#${player.playerId}`), player };
 }
 
+/**
+ * Log seqs are timestamp-based but strictly monotonic: two log events from
+ * the same publisher in the same millisecond would otherwise share a subject
+ * key and the store's supersedes guard would silently drop one (take-turn
+ * publishes untap + draw + turn logs in a single burst).
+ */
+let lastLogSeq = 0;
+export function nextLogSeq(): number {
+  lastLogSeq = Math.max(lastLogSeq + 1, Date.now() % 1_000_000_000);
+  return lastLogSeq;
+}
+
 function logEvent(entry: Omit<LogEntry, 'ts'>): StateEvent {
   const { me, gameId } = ctx();
-  // Log subjects are per (seq, by): use a timestamp-based seq so entries never collide.
-  return { t: 'log', g: gameId, by: me, seq: Date.now() % 1_000_000_000, entry: { ...entry, ts: Date.now() } };
+  return { t: 'log', g: gameId, by: me, seq: nextLogSeq(), entry: { ...entry, ts: Date.now() } };
 }
 
 function roomEvent(room: RoomState): StateEvent {
@@ -78,6 +90,10 @@ function myPlayerState(patch: Partial<PlayerState> = {}): PlayerState {
   merged.library = s.hidden.library;
   // Peers need this to know whether my hand is open for them to act on.
   merged.showHandToTable = s.prefs.showHandToTable;
+  // Identity color + playmat ride along on every publish; the color always
+  // resolves (seat default) so peers never have to guess.
+  merged.color = s.prefs.playerColor ?? merged.color ?? seatDefaultColor(merged.seat).name;
+  merged.playmat = s.prefs.playmatStyle ?? merged.playmat;
   if (merged.topRevealed !== null) merged.topRevealed = s.hidden.library[0] ?? null;
   return merged;
 }
@@ -234,15 +250,23 @@ function isLand(pool: PoolCard | undefined): boolean {
   return /\bLand\b/.test(pool?.sf?.faces[0]?.type ?? '');
 }
 
+/** The seat numbers currently occupied (mats exist only for these). */
+function occupiedSeats(): number[] {
+  const { s } = ctx();
+  return s.players.map((p) => p.seat);
+}
+
 /**
  * Archidekt-style placement for "Play" without an explicit drop point: lands
- * slot into the row hugging their owner's edge, everything else into the row
- * toward the middle. A slot counts as occupied when any battlefield card sits
- * near it, so manually dragging a card away frees its slot — no synced state.
+ * slot into the row hugging their owner's edge of their PLAYMAT, everything
+ * else into the row toward the table center. A slot counts as occupied when
+ * any battlefield card sits near it, so manually dragging a card away frees
+ * its slot — no synced state.
  */
 export function autoPlayPosition(guid: string): { x: number; y: number } {
   const { s } = ctx();
   const owner = ownerOf(guid);
+  const seats = occupiedSeats();
   const seat = s.players.find((p) => p.playerId === owner)?.seat ?? s.session?.seat ?? 0;
   const row = isLand(s.pool[guid]) ? 0 : 1;
   const taken = (x: number, y: number) =>
@@ -252,13 +276,35 @@ export function autoPlayPosition(guid: string): { x: number; y: number } {
         Math.abs(c.x - x) < CARD_W * 0.55 &&
         Math.abs(c.y - y) < CARD_H * 0.55
     );
-  for (let col = 0; col < HOME_COLS; col++) {
-    const p = homeSlot(seat, row, col);
+  const slots = matSlots(seat, matRect(seat, (q) => seats.includes(q)), row);
+  for (const p of slots) {
     if (!taken(p.x, p.y)) return p;
   }
   // Row full: pile onto the last slot with a visible offset.
-  const last = homeSlot(seat, row, HOME_COLS - 1);
+  const last = slots[slots.length - 1];
   return { x: last.x + 40, y: last.y + 30 };
+}
+
+/**
+ * Battlefield control follows the playmats: a card sitting on a player's mat
+ * is controlled by that player (dragging someone's card onto your mat claims
+ * it — and rotates it to your orientation, since cards render in their
+ * controller's orientation). The DMZ and off-mat space keep the current
+ * controller.
+ */
+function controllerAt(x: number, y: number, current: string): string {
+  const { s } = ctx();
+  const seat = matSeatAt(x, y, occupiedSeats());
+  if (seat === null) return current;
+  return s.players.find((p) => p.seat === seat)?.playerId ?? current;
+}
+
+/** A control-change log entry, or null when nothing changed. */
+function controlLog(guid: string, prev: CardState, nextController: string): StateEvent | null {
+  const { s } = ctx();
+  if (prev.zone !== 'battlefield' || prev.controllerId === nextController) return null;
+  const name = s.players.find((p) => p.playerId === nextController)?.name ?? '?';
+  return logEvent({ kind: 'zone', text: `${name} now controls ${cardName(s.pool, guid, prev.faceDown)}` });
 }
 
 /**
@@ -285,12 +331,19 @@ export function moveCard(guid: string, target: MoveTarget): void {
   const fromHidden = removeFromHidden(guid);
 
   const leavingBattlefield = cur.zone === 'battlefield' && target.zone !== 'battlefield';
+  const targetX = target.x ?? cur.x;
+  const targetY = target.y ?? cur.y;
+  // On the battlefield the mat under the card decides control; everywhere
+  // else control reverts to the owner.
+  const controllerId =
+    target.zone === 'battlefield' ? controllerAt(targetX, targetY, cur.controllerId) : zoneOwnerId;
   const next: CardState = {
     ...cur,
     zone: target.zone,
     zoneOwnerId: zoneOwnerId === cur.ownerId ? undefined : zoneOwnerId,
-    x: target.x ?? cur.x,
-    y: target.y ?? cur.y,
+    controllerId,
+    x: targetX,
+    y: targetY,
     tapped: leavingBattlefield ? false : cur.tapped,
     faceDown: target.faceDown ?? (leavingBattlefield ? false : cur.faceDown),
     rotIndex: leavingBattlefield ? 0 : cur.rotIndex,
@@ -310,6 +363,8 @@ export function moveCard(guid: string, target: MoveTarget): void {
   } else {
     events.push(cardEvent(next));
   }
+  const ctlLog = controlLog(guid, cur, next.controllerId);
+  if (ctlLog) events.push(ctlLog);
 
   if (fromHidden || targetIsMyHidden) {
     syncHandReveals(events);
@@ -324,11 +379,23 @@ export function playFromHand(guid: string, x: number, y: number, faceDown = fals
 
 export function setCardPosition(guid: string, x: number, y: number): void {
   const cur = currentCard(guid);
-  sendState([cardEvent({ ...cur, x, y })]);
+  const controllerId = cur.zone === 'battlefield' ? controllerAt(x, y, cur.controllerId) : cur.controllerId;
+  const events: StateEvent[] = [cardEvent({ ...cur, x, y, controllerId })];
+  const log = controlLog(guid, cur, controllerId);
+  if (log) events.push(log);
+  sendState(events);
 }
 
 export function moveCardsGroup(moves: { guid: string; x: number; y: number }[]): void {
-  sendState(moves.map(({ guid, x, y }) => cardEvent({ ...currentCard(guid), x, y })));
+  const events: StateEvent[] = [];
+  for (const { guid, x, y } of moves) {
+    const cur = currentCard(guid);
+    const controllerId = cur.zone === 'battlefield' ? controllerAt(x, y, cur.controllerId) : cur.controllerId;
+    events.push(cardEvent({ ...cur, x, y, controllerId }));
+    const log = controlLog(guid, cur, controllerId);
+    if (log) events.push(log);
+  }
+  sendState(events);
 }
 
 export function tapCards(guids: string[], tapped: boolean): void {
@@ -476,14 +543,17 @@ export function createTokens(tokens: PoolCard[], at: { x: number; y: number }): 
     { t: 'pool', g: gameId, by: me, seq: 1, chunk: nextPoolChunk(), nChunks: 1, cards: tokens },
   ];
   tokens.forEach((tok, i) => {
+    const x = at.x + i * 30;
+    const y = at.y + i * 12;
     events.push(
       cardEvent({
         ...defaultCardState(tok.guid),
         ownerId: me,
-        controllerId: me,
+        // A token spawned onto someone's mat is theirs to control.
+        controllerId: controllerAt(x, y, me),
         zone: 'battlefield',
-        x: at.x + i * 30,
-        y: at.y + i * 12,
+        x,
+        y,
       })
     );
   });
@@ -526,20 +596,11 @@ export function flipCoin(): void {
   sendState([logEvent({ kind: 'coin', text: `${myName} flipped ${result}`, result })]);
 }
 
-export function passTurn(toPlayerId: string): void {
-  const { s } = ctx();
-  const name = s.players.find((p) => p.playerId === toPlayerId)?.name ?? '?';
-  const turn = (s.room?.turn ?? 0) + 1;
-  sendState([
-    roomEvent({ gameId: s.room?.gameId ?? '', turnPlayerId: toPlayerId, turn }),
-    logEvent({ kind: 'turn', text: `Turn ${turn} — passed to ${name}` }),
-  ]);
-}
-
 /**
- * G-5 shortcut: untap all + draw, announced as one turn. Also claims the turn
- * marker; the count bumps only when the marker actually changes hands, so
- * "pass to me" followed by "take turn" counts once, not twice.
+ * G-5 shortcut: untap all + draw, announced as one turn. Claims the turn
+ * marker — deliberately free-for-all, anyone may take it at any time ("I'm
+ * done" is said out of band). The count bumps only when the marker actually
+ * changes hands, so re-taking your own turn doesn't inflate it.
  */
 export function takeTurn(): void {
   const { s, me, myName } = ctx();
@@ -599,7 +660,7 @@ export function importDeck(cards: PoolCard[]): void {
     events.push({ t: 'room', g: gameId, by: me, seq: nextSeq('room'), room: { gameId, turnPlayerId: null, turn: 0 } });
   }
   events.push({
-    t: 'log', g: gameId, by: me, seq: Date.now() % 1_000_000_000,
+    t: 'log', g: gameId, by: me, seq: nextLogSeq(),
     entry: { kind: 'note', text: `${myName} imported a deck (${cards.length} cards)`, ts: Date.now() },
   });
   sendState(events);

@@ -5,6 +5,7 @@ import { useGame } from '../store';
 import { useUI, type ModalState } from '../uiStore';
 import * as actions from '../actions';
 import { deckColorIdentity, manaSymbolUrl } from '../cards';
+import { PLAYER_PALETTE, paletteColor } from '../colors';
 import { resolveDeckByNames, resolveByIds, searchTokens, toPoolCard, type ScryfallCard } from '../scryfall';
 import { fetchArchidektDeck, parseArchidektUrl } from '../archidekt';
 import { persisted } from '../session';
@@ -787,9 +788,68 @@ function OpeningHandModal({ onClose }: { onClose: () => void }) {
 function PrefsModal({ onClose }: { onClose: () => void }) {
   const prefs = useGame((s) => s.prefs);
   const setPrefs = useGame((s) => s.setPrefs);
+  const session = useGame((s) => s.session);
+  const pool = useGame((s) => s.pool);
+  const seat = session?.seat ?? 0;
+  const myColor = paletteColor(prefs.playerColor, seat);
+  const hasCommander = Object.values(pool).some(
+    (p) => p.ownerId === session?.playerId && p.commander
+  );
+  const matChoice = prefs.playmatStyle?.startsWith('url:')
+    ? 'url'
+    : prefs.playmatStyle ?? 'color';
+  /** Color + playmat are shared identity — publish so the table sees them. */
+  const publishIdentity = () => {
+    if (session?.seat !== null && session?.seat !== undefined) actions.publishMyCounts();
+  };
   return (
     <Backdrop onClose={onClose}>
       <h3>Preferences</h3>
+      <div>
+        <div style={{ marginBottom: 6 }}>
+          My color <span className="subtle">(card rings, cursor, playmat — not a mana color)</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {PLAYER_PALETTE.map((c) => (
+            <button
+              key={c.name}
+              className={`swatch${myColor.name === c.name ? ' picked' : ''}`}
+              title={c.name}
+              style={{ background: c.hex }}
+              onClick={() => {
+                setPrefs({ playerColor: c.name });
+                publishIdentity();
+              }}
+            />
+          ))}
+        </div>
+      </div>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        Playmat background
+        <select
+          value={matChoice}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === 'url') {
+              const url = prompt(
+                'Image URL for your playmat:',
+                prefs.playmatStyle?.startsWith('url:') ? prefs.playmatStyle.slice(4) : 'https://'
+              );
+              if (!url || !/^https?:\/\//.test(url)) return;
+              setPrefs({ playmatStyle: `url:${url}` });
+            } else {
+              setPrefs({ playmatStyle: v });
+            }
+            publishIdentity();
+          }}
+        >
+          <option value="color">My color's pattern</option>
+          <option value="commander" disabled={!hasCommander}>
+            My commander's art{hasCommander ? '' : ' (import a deck first)'}
+          </option>
+          <option value="url">Custom image URL…</option>
+        </select>
+      </label>
       <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
           type="checkbox"
