@@ -220,13 +220,19 @@ export function Battlefield() {
         ?.closest('[data-drop]') as HTMLElement | null;
       if (target) {
         const [zone, zoneOwnerId] = target.dataset.drop!.split(':');
+        const refused: string[] = [];
         for (const g of drag.guids) {
           // Another player's pile rejects the drop (the card snaps back) rather
           // than quietly rerouting to your own zone of the same kind.
           if (actions.canPlaceIn(g, zone as ZoneName, zoneOwnerId || undefined)) {
             actions.moveCard(g, { zone: zone as ZoneName });
+          } else {
+            refused.push(g);
           }
         }
+        // Tell peers "nothing moved" so their drag ghosts retire now instead
+        // of hovering at the refused pile for the dragend grace period.
+        if (refused.length) actions.reassertCards(refused);
       } else {
         const moves = drag.guids
           .map((g) => ({ guid: g, ...dragPositions[g] }))

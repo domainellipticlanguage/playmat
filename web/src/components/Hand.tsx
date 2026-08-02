@@ -4,7 +4,7 @@ import { useGame } from '../store';
 import { useUI } from '../uiStore';
 import * as actions from '../actions';
 import { liveView, screenToWorld } from '../view';
-import { CardView } from './CardView';
+import { CardView, DragGhost } from './CardView';
 
 /** Resting overlap, and the tightest we'll squeeze before cards get ungrabbable. */
 const REST_OVERLAP = -14;
@@ -136,13 +136,7 @@ export function Hand() {
           );
         })}
       </div>
-      {ghost && (
-        <CardView
-          className="card-ghost"
-          pool={pool[ghost.guid]}
-          style={{ left: ghost.x - 40, top: ghost.y - 56 }}
-        />
-      )}
+      {ghost && <DragGhost pool={pool[ghost.guid]} x={ghost.x} y={ghost.y} />}
     </>
   );
 }

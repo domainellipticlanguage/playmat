@@ -3,10 +3,18 @@ import { normalizeRoomCode } from '@playmat/shared';
 import { createRoom, joinRoom, startSession } from '../connection';
 import { persisted } from '../session';
 
+/** Be lenient: a pasted invite URL (or anything with ?room=) yields its code. */
+function extractRoomCode(text: string): string {
+  const m = text.match(/[?&]room=([A-Za-z0-9]+)/i);
+  return m ? m[1] : text;
+}
+
 export function Lobby() {
   const stored = persisted.get();
   const [name, setName] = useState(stored.name ?? '');
   const [code, setCode] = useState(new URLSearchParams(location.search).get('room') ?? '');
+  /** Arrived via invite link — joining is the point, so Join leads. */
+  const [invited] = useState(() => !!new URLSearchParams(location.search).get('room'));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,23 +58,55 @@ export function Lobby() {
             onChange={(e) => setName(e.target.value)}
           />
         </div>
-        <div className="row">
-          <button className="primary" disabled={busy || !name.trim()} onClick={() => go('create')}>
-            Create a room
-          </button>
-          <span className="subtle">or</span>
-          <input
-            placeholder="Room code"
-            value={code}
-            maxLength={8}
-            style={{ width: 110, textTransform: 'uppercase', letterSpacing: 2 }}
-            onChange={(e) => setCode(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && code && go('join')}
-          />
-          <button disabled={busy || !name.trim() || normalizeRoomCode(code).length < 4} onClick={() => go('join')}>
-            Join
-          </button>
-        </div>
+        {/* Join is the primary action whenever there's a code to join (typed
+            or from an invite link); Create leads only on a bare visit. The
+            row order is fixed at mount so nothing jumps around mid-typing. */}
+        {(() => {
+          const joinable = normalizeRoomCode(code).length >= 4;
+          const codeInput = (
+            <input
+              placeholder="Room code or invite link"
+              value={code}
+              maxLength={80}
+              style={{ width: invited ? 110 : 170, textTransform: 'uppercase', letterSpacing: 2 }}
+              onChange={(e) => setCode(extractRoomCode(e.target.value))}
+              onKeyDown={(e) => e.key === 'Enter' && joinable && go('join')}
+            />
+          );
+          const joinBtn = (
+            <button
+              className={joinable ? 'primary' : ''}
+              disabled={busy || !name.trim() || !joinable}
+              onClick={() => go('join')}
+            >
+              Join
+            </button>
+          );
+          const createBtn = (
+            <button
+              className={joinable ? '' : 'primary'}
+              disabled={busy || !name.trim()}
+              onClick={() => go('create')}
+            >
+              Create a room
+            </button>
+          );
+          return invited ? (
+            <div className="row">
+              {codeInput}
+              {joinBtn}
+              <span className="subtle">or</span>
+              {createBtn}
+            </div>
+          ) : (
+            <div className="row">
+              {createBtn}
+              <span className="subtle">or</span>
+              {codeInput}
+              {joinBtn}
+            </div>
+          );
+        })()}
         {error && <div className="error">{error}</div>}
         <div className="subtle">
           No accounts. Rooms hold up to four seats; extra joiners spectate. You'll import a deck once

@@ -227,6 +227,17 @@ export function canPlaceIn(guid: string, zone: ZoneName, zoneOwnerId?: string): 
   return ownerOf(guid) === zoneOwnerId;
 }
 
+/**
+ * Re-publish a card's current state unchanged (just a seq bump). A drag that
+ * ends without a move — e.g. a drop refused by canPlaceIn — publishes no card
+ * event, so peers' drag ghosts would hover out the full 1.5s dragend grace
+ * before snapping back. A card event retires the ghost immediately.
+ */
+export function reassertCards(guids: string[]): void {
+  const { s } = ctx();
+  sendState(guids.filter((g) => s.cards[g]).map((g) => cardEvent(currentCard(g))));
+}
+
 /** The universal move (C-11, Z-6). Handles hidden<->public bookkeeping. */
 export function moveCard(guid: string, target: MoveTarget): void {
   const { s, me } = ctx();

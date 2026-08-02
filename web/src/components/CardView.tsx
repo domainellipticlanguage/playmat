@@ -9,11 +9,28 @@
  * own click/context-menu behavior stays inert and events bubble, so parents
  * keep their click handlers and custom context menus.
  */
-import { MtgCard } from 'mtg-crucible/react';
+import { MtgCard, type MtgCardMenuItem } from 'mtg-crucible/react';
 import type { PoolCard } from '@playmat/shared';
-import { displayDataFor, faceAt, useCustomDisplay } from '../cards';
+import { cardSearchText, displayDataFor, useCustomDisplay } from '../cards';
+import { CARD_W, liveView } from '../view';
 
 const NO_CARD: PoolCard = { guid: '', ownerId: '' };
+
+/**
+ * Crucible's card menu closes itself after its BUILT-IN items, but runs
+ * extraMenuItems' actions with the menu left open — its only other close path
+ * is a document-level mousedown. Dispatch one after the action so picking an
+ * item dismisses the menu like you'd expect. (Worth fixing upstream.)
+ */
+export function withMenuClose(items: MtgCardMenuItem[]): MtgCardMenuItem[] {
+  return items.map((m) => ({
+    ...m,
+    action: () => {
+      m.action();
+      document.dispatchEvent(new MouseEvent('mousedown'));
+    },
+  }));
+}
 
 export interface CardViewProps {
   /** Pool entry to display; omit (or pass null) for a plain card back. */
@@ -22,11 +39,21 @@ export interface CardViewProps {
   faceDown?: boolean;
   /** Swap Scryfall /normal/ images for /large/ (hover preview). */
   large?: boolean;
+  /** Right-click menu (crucible's own), e.g. the opening hand's keep/bottom/exile. */
+  menuItems?: MtgCardMenuItem[];
   className?: string;
   style?: React.CSSProperties;
 }
 
-export function CardView({ pool, rotIndex = 0, faceDown = false, large = false, className, style }: CardViewProps) {
+export function CardView({
+  pool,
+  rotIndex = 0,
+  faceDown = false,
+  large = false,
+  menuItems,
+  className,
+  style,
+}: CardViewProps) {
   const p = pool ?? NO_CARD;
   const customDisplay = useCustomDisplay(p);
   let display =
@@ -37,6 +64,48 @@ export function CardView({ pool, rotIndex = 0, faceDown = false, large = false, 
         customDisplay ?? displayDataFor(p, rotIndex, true)
       : displayDataFor(p, rotIndex, faceDown);
   if (large) display = { ...display, frontFaceImageUrl: display.frontFaceImageUrl.replace('/normal/', '/large/') };
-  const face = faceDown ? null : faceAt(p, rotIndex);
-  return <MtgCard card={display} cardText={face?.oracle} className={className} style={style} hideMenuItems="all" />;
+  return (
+    <MtgCard
+      card={display}
+      cardText={faceDown ? undefined : cardSearchText(p, rotIndex)}
+      className={className}
+      style={style}
+      hideMenuItems="all"
+      extraMenuItems={menuItems && withMenuClose(menuItems)}
+    />
+  );
+}
+
+/**
+ * Pointer-following ghost for drags out of the hand or a pile, sized to the
+ * battlefield's current zoom so the card lands at the size it was dragged.
+ *
+ * `position: fixed` must ride the style prop: MtgCard sets an inline
+ * `position: relative` on its root, and only the style spread wins over it —
+ * a CSS class cannot.
+ */
+export function DragGhost({
+  pool,
+  rotIndex = 0,
+  faceDown = false,
+  x,
+  y,
+}: {
+  pool?: PoolCard | null;
+  rotIndex?: number;
+  faceDown?: boolean;
+  x: number;
+  y: number;
+}) {
+  const w = Math.max(56, Math.min(240, CARD_W * liveView.current.k));
+  const h = (w * 7) / 5;
+  return (
+    <CardView
+      className="card-ghost"
+      pool={pool}
+      rotIndex={rotIndex}
+      faceDown={faceDown}
+      style={{ position: 'fixed', width: w, left: x - w / 2, top: y - h / 2 }}
+    />
+  );
 }

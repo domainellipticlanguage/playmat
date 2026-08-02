@@ -251,8 +251,37 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .hud.turn { border-color: var(--accent); box-shadow: 0 0 18px var(--accent-soft), var(--shadow); }
 
 .hud .who { display: flex; flex-direction: column; gap: 4px; min-width: 118px; }
+/* Collapse chevron + folded tray (client-only, so it can't confuse peers). */
+.hud-collapse {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 2px 7px;
+  font-size: 10px;
+  line-height: 14px;
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+  z-index: 1;
+}
+.hud-collapse:hover { color: var(--accent); border: none; }
+.hud.collapsed { padding: 5px 26px 5px 10px; }
+.hud-mini { display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
+.hud-mini .mini-stat { color: var(--ink-dim); }
 .hud .name { font-weight: bold; display: flex; align-items: center; gap: 6px; }
 .presence { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-dim); }
+/* Active-player chip — the green presence dot is connectivity, not turn. */
+.turn-badge {
+  background: var(--accent);
+  color: #1a130c;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 1px 7px;
+}
 .presence.connected { background: var(--ok); }
 .presence.away { background: var(--warn); }
 
@@ -346,10 +375,11 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .hand-card:hover { transform: translateY(-22px) scale(1.35); z-index: 5; margin: 0 24px; }
 .hand-card .mtg-card { display: block; width: 100%; }
 .hand-card .mtg-card-face { border-radius: 6px !important; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7) !important; }
+/* Top-LEFT corner: the top-right would sit on the card's mana cost. */
 .hand-card.revealed::after {
   content: '👁';
   position: absolute;
-  top: 2px; right: 4px;
+  top: 2px; left: 4px;
   font-size: 14px;
   filter: drop-shadow(0 0 3px #000);
 }
@@ -448,10 +478,10 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .hover-preview .mtg-card-face { border-radius: 12px !important; box-shadow: var(--shadow) !important; }
 .hover-preview.sideways .mtg-card { transform: rotate(90deg) scale(0.72); }
 
-/* Drag ghost that follows the pointer from a hand card or a pile. */
+/* Drag ghost that follows the pointer from a hand card or a pile.
+   Position and size are inline (DragGhost) — MtgCard's own inline styles
+   would beat class rules for those. */
 .card-ghost {
-  position: fixed;
-  width: 80px;
   opacity: 0.85;
   pointer-events: none;
   z-index: 80;

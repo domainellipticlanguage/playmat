@@ -4,7 +4,7 @@ import { useGame } from '../store';
 import { useUI } from '../uiStore';
 import * as actions from '../actions';
 import { liveView, relativeEdge, screenToWorld } from '../view';
-import { CardView } from './CardView';
+import { CardView, DragGhost } from './CardView';
 
 const PLAYER_COUNTERS = ['poison', 'energy', 'experience'];
 
@@ -264,12 +264,42 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
 
   const lifeAdjust = (delta: number) => actions.setLife(pid, state.life + delta);
 
+  // Client-only: fold the tray down to a stat line so it stops hiding the
+  // battlefield. Piles aren't drop targets while collapsed — expand to drop.
+  const [collapsed, setCollapsed] = useState(false);
+
+  if (collapsed) {
+    return (
+      <div className={`hud collapsed pos-${edge}${room?.turnPlayerId === pid ? ' turn' : ''}`}>
+        <button className="hud-collapse" title="Expand player tray" onClick={() => setCollapsed(false)}>
+          ▸
+        </button>
+        <div className="hud-mini">
+          <span className={`presence ${presenceClass}`} title={presenceClass || 'not seen yet'} />
+          <b>{player.name}</b>
+          {room?.turnPlayerId === pid && <span className="turn-badge">▶ turn</span>}
+          <span className="mini-stat" title="life">♥ {state.life}</span>
+          <span className="mini-stat" title="cards in hand">✋ {handCount}</span>
+          <span className="mini-stat" title="cards in library">🂠 {libraryCount}</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`hud pos-${edge}${room?.turnPlayerId === pid ? ' turn' : ''}`}>
+      <button className="hud-collapse" title="Collapse player tray" onClick={() => setCollapsed(true)}>
+        ▾
+      </button>
       <div className="who">
         <div className="name">
           <span className={`presence ${presenceClass}`} title={presenceClass || 'not seen yet'} />
           {player.name} {isMe && <span style={{ color: 'var(--ink-dim)' }}>(you)</span>}
+          {room?.turnPlayerId === pid && (
+            <span className="turn-badge" title={isMe ? 'Your turn' : `${player.name}'s turn`}>
+              ▶ turn
+            </span>
+          )}
         </div>
         <div className="life">
           <div className="stack">
@@ -476,12 +506,12 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         </div>
       </div>
       {pileDrag.ghost && (
-        <CardView
-          className="card-ghost"
+        <DragGhost
           pool={pileDrag.ghost.pool}
           rotIndex={pileDrag.ghost.rotIndex ?? 0}
           faceDown={!pileDrag.ghost.pool}
-          style={{ left: pileDrag.ghost.x - 40, top: pileDrag.ghost.y - 56 }}
+          x={pileDrag.ghost.x}
+          y={pileDrag.ghost.y}
         />
       )}
     </div>

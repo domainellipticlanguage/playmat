@@ -8,7 +8,7 @@
  * (transform/MDFC — the y:180 entries mean "show back face").
  */
 import { useEffect, useState } from 'react';
-import { computeRotations } from 'mtg-crucible/parser';
+import { computeRotations, normalizeCard, toScryfallText } from 'mtg-crucible/parser';
 import { renderCard, toDisplayCard } from 'mtg-crucible';
 import type { CardData, MtgCardDisplayData, Rotation } from 'mtg-crucible';
 import type { PoolCard, PoolFace } from '@playmat/shared';
@@ -153,6 +153,43 @@ export function displayDataFor(pool: PoolCard, rotIndex: number, faceDown: boole
 /** The z-rotation (degrees) to apply for the current synced state. */
 export function zRotation(pool: PoolCard, rotIndex: number): number {
   return rotationAt(pool, rotIndex).z;
+}
+
+const searchTextCache = new Map<string, string | undefined>();
+
+/**
+ * Scryfall-style spoiler text for MtgCard's invisible cardText overlay — via
+ * crucible's toScryfallText, so ctrl+F finds a card by name, mana cost, type
+ * line, rules, or P/T, and only by its functional text (no flavor/artist).
+ * Covers custom tokens straight from their recipe.
+ */
+export function cardSearchText(pool: PoolCard, rotIndex: number): string | undefined {
+  const key = pool.custom ? pool.guid : `${pool.guid}#${faceIndexAt(pool, rotIndex)}`;
+  if (searchTextCache.has(key)) return searchTextCache.get(key);
+  let text: string | undefined;
+  try {
+    if (pool.custom) {
+      text = toScryfallText(normalizeCard(pool.custom as CardData));
+    } else {
+      const face = pool.sf ? faceAt(pool, rotIndex) : null;
+      text = face
+        ? toScryfallText(
+            normalizeCard({
+              name: face.name,
+              manaCost: face.mana,
+              typeLine: face.type,
+              abilities: face.oracle,
+              power: face.power,
+              toughness: face.toughness,
+            })
+          )
+        : undefined;
+    }
+  } catch {
+    text = undefined;
+  }
+  searchTextCache.set(key, text);
+  return text;
 }
 
 // ---------------------------------------------------------------------------

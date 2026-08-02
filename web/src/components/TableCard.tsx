@@ -3,6 +3,7 @@ import { MtgCard } from 'mtg-crucible/react';
 import type { CardState, PoolCard } from '@playmat/shared';
 import {
   cardRotations,
+  cardSearchText,
   displayDataFor,
   effectivePT,
   faceAt,
@@ -14,6 +15,7 @@ import { CARD_H, CARD_W, seatAngle } from '../view';
 import { useUI } from '../uiStore';
 import * as actions from '../actions';
 import { useGame } from '../store';
+import { withMenuClose } from './CardView';
 
 export interface TableCardProps {
   card: CardState;
@@ -115,11 +117,11 @@ export const TableCard = memo(function TableCard({
         {display ? (
           <MtgCard
             card={display}
-            cardText={face?.oracle}
+            cardText={pool && !card.faceDown ? cardSearchText(pool, card.rotIndex) : undefined}
             style={{ width: '100%', height: '100%' }}
             rotateWidgetStyle={{ display: 'none' }}
             hideMenuItems="all"
-            extraMenuItems={menuItemsFor(card, pool)}
+            extraMenuItems={withMenuClose(menuItemsFor(card, pool))}
           />
         ) : (
           <div style={{ width: '100%', height: '100%', background: '#333' }} />

@@ -694,7 +694,6 @@ function ImportModal({ onClose }: { onClose: () => void }) {
 // ---------------------------------------------------------------------------
 
 type HandDest = 'keep' | 'bottom' | 'exile';
-const NEXT_DEST: Record<HandDest, HandDest> = { keep: 'bottom', bottom: 'exile', exile: 'keep' };
 const DEST_LABEL: Record<Exclude<HandDest, 'keep'>, string> = {
   bottom: '→ bottom of library',
   exile: '→ exile',
@@ -712,8 +711,7 @@ function OpeningHandModal({ onClose }: { onClose: () => void }) {
   const [mulligans, setMulligans] = useState(0);
   const [dests, setDests] = useState<Record<string, HandDest>>({});
 
-  const cycle = (guid: string) =>
-    setDests((d) => ({ ...d, [guid]: NEXT_DEST[d[guid] ?? 'keep'] }));
+  const setDest = (guid: string, dest: HandDest) => setDests((d) => ({ ...d, [guid]: dest }));
 
   const nBottom = hand.filter((g) => dests[g] === 'bottom').length;
   const nExile = hand.filter((g) => dests[g] === 'exile').length;
@@ -731,7 +729,7 @@ function OpeningHandModal({ onClose }: { onClose: () => void }) {
     <Backdrop onClose={onClose}>
       <h3>{mulligans === 0 ? 'Your opening hand' : `Mulligan #${mulligans} — keep this one?`}</h3>
       <div className="subtle">
-        Click a card to cycle: keep → bottom of library → exile.
+        Right-click a card to bottom it or exile it.
         {mulligans > 0 && ` London rule suggests bottoming ${Math.min(mulligans, hand.length)} — your call.`}
       </div>
       <div className="card-grid">
@@ -739,9 +737,14 @@ function OpeningHandModal({ onClose }: { onClose: () => void }) {
           const p = pool[guid];
           const dest = dests[guid] ?? 'keep';
           return (
-            <div key={guid} className="gcard" onClick={() => cycle(guid)} style={{ cursor: 'pointer' }}>
+            <div key={guid} className="gcard" style={{ cursor: 'context-menu' }}>
               <CardView
                 pool={p}
+                menuItems={[
+                  { label: 'Keep', action: () => setDest(guid, 'keep') },
+                  { label: 'To bottom of library', action: () => setDest(guid, 'bottom') },
+                  { label: 'Exile', action: () => setDest(guid, 'exile') },
+                ]}
                 style={
                   dest === 'keep'
                     ? undefined
