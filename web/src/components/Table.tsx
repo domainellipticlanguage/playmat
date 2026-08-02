@@ -58,6 +58,22 @@ export function Table() {
     setTimeout(() => setCopied(false), 1500);
   };
 
+  /**
+   * Navigate home to the lobby. Pushes a history entry, so the browser's back
+   * arrow returns to the table — the session stays saved for the return trip.
+   */
+  const goHome = () => {
+    stopSession();
+    useGame.getState().setSession(null);
+    history.pushState(null, '', location.pathname);
+  };
+
+  /** Leave for real: also forget the saved session, so back won't auto-rejoin. */
+  const leaveTable = () => {
+    persisted.patch({ lastSession: undefined });
+    goHome();
+  };
+
   const nextSeatPlayer = () => {
     const seated = [...players].sort((a, b) => a.seat - b.seat);
     if (!seated.length) return null;
@@ -67,92 +83,111 @@ export function Table() {
 
   const ui = useUI.getState();
 
+  /** Open a topbar dropdown, anchored under the button that was clicked. */
+  const dropdown =
+    (items: NonNullable<Parameters<typeof ui.openCtxMenu>[0]>['items']) => (e: React.MouseEvent) => {
+      const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      ui.openCtxMenu({ x: r.left, y: r.bottom + 6, items });
+    };
+
+  const sep = { sep: true, label: '' };
+  const tokenItem = {
+    label: 'Create token…',
+    action: () => ui.openModal({ kind: 'tokens', at: centerDropSpot() }),
+  };
+  const diceItems = [
+    { label: 'Roll a d6', action: () => actions.rollDie(6) },
+    { label: 'Roll a d20', action: () => actions.rollDie(20) },
+    {
+      label: 'Roll a dN…',
+      action: () => {
+        const n = Number(prompt('Roll a die with how many sides?', '10'));
+        if (n > 1) actions.rollDie(n);
+      },
+    },
+    { label: 'Flip a coin', action: () => actions.flipCoin() },
+  ];
+  const gameItems = [
+    { label: 'Mulligan — hand back, draw 7', action: () => actions.mulligan() },
+    {
+      label: 'Pass the turn marker',
+      action: () => {
+        const next = nextSeatPlayer();
+        if (next) actions.passTurn(next.playerId);
+      },
+    },
+    sep,
+    { label: iHaveDeck ? 'Re-import deck…' : 'Import deck…', action: () => ui.openModal({ kind: 'import' }) },
+    sep,
+    {
+      label: 'New game…',
+      action: () =>
+        ui.openModal({
+          kind: 'confirm',
+          title: 'New game?',
+          body: 'Every card returns to its owner’s library and everyone shuffles up. Life totals reset.',
+          onConfirm: () => actions.resetGame(),
+        }),
+    },
+  ];
+
   return (
     <div className="table-root">
       <div className="topbar">
-        <img src="/favicon.svg" alt="" style={{ height: 24, marginRight: -4 }} />
-        <span className="code" title="Click to copy invite link" onClick={copyInvite}>
-          {session.roomCode} {copied && <span style={{ fontSize: 11 }}>copied!</span>}
-        </span>
-        <span className={`status ${connStatus}`}>
-          {connStatus === 'connected' ? '● live' : connStatus === 'reconnecting' ? '◌ reconnecting…' : connStatus}
-        </span>
-        {spectator && <span className="status" style={{ color: 'var(--warn)' }}>spectating</span>}
-        <span className="spacer" />
+        <div className="room-info">
+          <img
+            src="/favicon.svg"
+            alt="Playmat"
+            className="home-logo"
+            title="Back to lobby"
+            onClick={goHome}
+          />
+          <span className="code" title="Click to copy invite link" onClick={copyInvite}>
+            {session.roomCode} {copied && <span style={{ fontSize: 11 }}>copied!</span>}
+          </span>
+          <span className={`status ${connStatus}`}>
+            {connStatus === 'connected' ? '● live' : connStatus === 'reconnecting' ? '◌ reconnecting…' : connStatus}
+          </span>
+          {spectator && <span className="status" style={{ color: 'var(--warn)' }}>spectating</span>}
+        </div>
         {!spectator && (
           <>
-            <button className="small" onClick={() => ui.openModal({ kind: 'import' })}>
-              {iHaveDeck ? 'Re-import deck' : 'Import deck'}
-            </button>
+            {!iHaveDeck && (
+              <button className="small primary" onClick={() => ui.openModal({ kind: 'import' })}>
+                Import deck
+              </button>
+            )}
             <button className="small" disabled={!iHaveDeck} onClick={() => actions.drawCards(1)} title="Draw (D)">
               Draw
             </button>
-            <button
-              className="small"
-              disabled={!iHaveDeck}
-              onClick={() => actions.mulligan()}
-              title="Shuffle your hand back and draw 7 (bottom cards yourself, London-style)"
-            >
-              Mulligan
-            </button>
             <button className="small" disabled={!iHaveDeck} onClick={() => actions.untapAll()} title="Untap all (U)">
-              Untap all
+              Untap
             </button>
             <button className="small" disabled={!iHaveDeck} onClick={() => actions.takeTurn()} title="Untap, upkeep, draw">
               Take turn ▸
             </button>
-            <button
-              className="small"
-              onClick={() => {
-                const next = nextSeatPlayer();
-                if (next) actions.passTurn(next.playerId);
-              }}
-              title="Pass the (decorative) turn marker"
-            >
-              Pass turn
-            </button>
-            <button className="small" onClick={() => ui.openModal({ kind: 'tokens', at: centerDropSpot() })}>
+            <button className="small bar-wide" onClick={() => ui.openModal({ kind: 'tokens', at: centerDropSpot() })}>
               Token
             </button>
-            <button className="small" onClick={() => actions.rollDie(6)}>d6</button>
-            <button className="small" onClick={() => actions.rollDie(20)}>d20</button>
-            <button
-              className="small"
-              onClick={() => {
-                const n = Number(prompt('Roll a die with how many sides?', '10'));
-                if (n > 1) actions.rollDie(n);
-              }}
-            >
-              dN
+            <button className="small bar-wide" onClick={dropdown(diceItems)}>
+              🎲 Dice ▾
             </button>
-            <button className="small" onClick={() => actions.flipCoin()}>coin</button>
+            <button className="small bar-wide" onClick={dropdown(gameItems)}>
+              Game ▾
+            </button>
             <button
-              className="small danger"
-              onClick={() =>
-                ui.openModal({
-                  kind: 'confirm',
-                  title: 'New game?',
-                  body: 'Every card returns to its owner’s library and everyone shuffles up. Life totals reset.',
-                  onConfirm: () => actions.resetGame(),
-                })
-              }
+              className="small bar-narrow"
+              title="Tokens, dice, and game actions"
+              onClick={dropdown([tokenItem, sep, ...diceItems, sep, ...gameItems])}
             >
-              New game
+              ☰ More
             </button>
           </>
         )}
+        <span className="spacer" />
         <button className="small" onClick={() => setShowLog((v) => !v)}>Log</button>
-        <button className="small" onClick={() => ui.openModal({ kind: 'prefs' })}>⚙</button>
-        <button
-          className="small"
-          onClick={() => {
-            stopSession();
-            persisted.patch({ lastSession: undefined });
-            useGame.getState().setSession(null);
-            history.replaceState(null, '', location.pathname);
-          }}
-          title="Leave table (your seat stays reserved)"
-        >
+        <button className="small" onClick={() => ui.openModal({ kind: 'prefs' })} title="Preferences">⚙</button>
+        <button className="small" onClick={leaveTable} title="Leave table (your seat stays reserved)">
           Leave
         </button>
       </div>

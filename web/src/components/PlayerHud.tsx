@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
-import type { PlayerState, SeatRecord, ZoneName } from '@playmat/shared';
+import type { PlayerState, PoolCard, SeatRecord, ZoneName } from '@playmat/shared';
 import { useGame } from '../store';
 import { useUI } from '../uiStore';
 import * as actions from '../actions';
-import { CARD_BACK_URL, faceAt } from '../cards';
 import { liveView, relativeEdge, screenToWorld } from '../view';
+import { CardView } from './CardView';
 
 const PLAYER_COUNTERS = ['poison', 'energy', 'experience'];
 
@@ -15,19 +15,22 @@ type PileDropTarget =
 
 type PileDropFn = (target: PileDropTarget, shiftKey: boolean) => void;
 
+/** What the drag ghost shows: a pool card, or (empty) a face-down card back. */
+type PileGhostCard = { pool?: PoolCard; rotIndex?: number };
+
 /**
  * Drag-from-pile plumbing: piles are drag sources as well as drop targets.
  * Below the movement threshold the gesture stays a click (draw / open modal);
  * past it a ghost follows the pointer and the drop function fires on release.
  */
 function usePileDrag() {
-  const [ghost, setGhost] = useState<{ img: string; x: number; y: number } | null>(null);
-  const dragRef = useRef<{ startX: number; startY: number; moved: boolean; img: string; drop: PileDropFn } | null>(null);
+  const [ghost, setGhost] = useState<(PileGhostCard & { x: number; y: number }) | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; moved: boolean; card: PileGhostCard; drop: PileDropFn } | null>(null);
   const suppressClick = useRef(false);
 
-  const start = (img: string, drop: PileDropFn) => (e: React.PointerEvent) => {
+  const start = (card: PileGhostCard, drop: PileDropFn) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    dragRef.current = { startX: e.clientX, startY: e.clientY, moved: false, img, drop };
+    dragRef.current = { startX: e.clientX, startY: e.clientY, moved: false, card, drop };
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     // Without this the browser starts a native HTML5 image drag, fires
     // pointercancel, and our pointerup never arrives.
@@ -47,7 +50,7 @@ function usePileDrag() {
       d.moved = true;
       useUI.getState().setDragging('pile');
     }
-    if (d.moved) setGhost({ img: d.img, x: e.clientX, y: e.clientY });
+    if (d.moved) setGhost({ ...d.card, x: e.clientX, y: e.clientY });
   };
 
   const end = (e: React.PointerEvent) => {
@@ -115,16 +118,22 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
 
   const pileDrag = usePileDrag();
 
-  /** Drag the (hidden) top of my library: battlefield = play, hand = draw, graveyard = mill. */
+  /**
+   * Drag the top of a library: battlefield = play, hand = draw, graveyard = mill.
+   * Works on anyone's library — my own order is local, a peer's rides along on
+   * their PlayerState.
+   */
   const dropFromLibrary: PileDropFn = (target, shift) => {
-    const top = useGame.getState().hidden.library[0];
+    const top = isMe ? useGame.getState().hidden.library[0] : state.library?.[0];
     if (!top) return;
     if (target.kind === 'battlefield') {
       actions.moveCard(top, { zone: 'battlefield', x: target.x, y: target.y, faceDown: shift });
     } else if (target.zone === 'hand' && (target.zoneOwnerId ?? pid) === pid) {
-      actions.drawCards(1);
-    } else if (target.zone !== 'library') {
-      actions.moveCard(top, { zone: target.zone, zoneOwnerId: target.zoneOwnerId });
+      // To the owner's own hand, this is a draw.
+      if (isMe) actions.drawCards(1);
+      else actions.moveCard(top, { zone: 'hand' });
+    } else if (target.zone !== 'library' && actions.canPlaceIn(top, target.zone, target.zoneOwnerId)) {
+      actions.moveCard(top, { zone: target.zone });
     }
   };
 
@@ -134,10 +143,11 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
     (target, shift) => {
       if (target.kind === 'battlefield') {
         actions.moveCard(guid, { zone: 'battlefield', x: target.x, y: target.y, faceDown: shift });
-      } else {
+      } else if (actions.canPlaceIn(guid, target.zone, target.zoneOwnerId)) {
+        // Dropping on someone else's pile is refused, not rerouted: a card only
+        // ever enters its own owner's zones.
         actions.moveCard(guid, {
           zone: target.zone,
-          zoneOwnerId: target.zoneOwnerId,
           libPos: target.zone === 'library' ? 'top' : undefined,
         });
       }
@@ -176,8 +186,30 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
 
   const libraryMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (!isMe) return;
     const ui = useUI.getState();
+    if (!isMe) {
+      // Library order is published, so a peer's deck has the same reach as
+      // their graveyard. Reordering stays with the owner: only their client
+      // holds the authoritative array, so a shuffle from here wouldn't stick.
+      ui.openCtxMenu({
+        x: e.clientX,
+        y: e.clientY,
+        items: [
+          {
+            label: `Search ${player.name}'s library`,
+            action: () => ui.openModal({ kind: 'search', ownerId: pid }),
+          },
+          {
+            label: 'Mill 1',
+            action: () => {
+              const top = state.library?.[0];
+              if (top) actions.moveCard(top, { zone: 'graveyard' });
+            },
+          },
+        ],
+      });
+      return;
+    }
     ui.openCtxMenu({
       x: e.clientX,
       y: e.clientY,
@@ -199,6 +231,33 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         { sep: true, label: '' },
         { label: state.topRevealed ? 'Stop playing with top revealed' : 'Play with top revealed',
           action: () => actions.setTopRevealed(!state.topRevealed) },
+      ],
+    });
+  };
+
+  /**
+   * Teaching mode: this player opened their hand to the table, so anyone may
+   * act on it. Every move below routes to THEIR zones automatically — moveCard
+   * resolves the destination from the card's owner, not from who clicked.
+   */
+  const canActOnHand = !isMe && !!state.showHandToTable;
+
+  const revealedHandMenu = (guid: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    const world = screenToWorld(liveView.current, window.innerWidth / 2, window.innerHeight / 2);
+    useUI.getState().openCtxMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        {
+          label: `Play for ${player.name}`,
+          action: () => actions.moveCard(guid, { zone: 'battlefield', x: world.x, y: world.y + 200 }),
+        },
+        { sep: true, label: '' },
+        { label: 'Discard', action: () => actions.moveCard(guid, { zone: 'graveyard' }) },
+        { label: 'Exile', action: () => actions.moveCard(guid, { zone: 'exile' }) },
+        { label: 'To library (top)', action: () => actions.moveCard(guid, { zone: 'library', libPos: 'top' }) },
+        { label: 'To library (bottom)', action: () => actions.moveCard(guid, { zone: 'library', libPos: 'bottom' }) },
       ],
     });
   };
@@ -285,18 +344,26 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           </div>
         )}
         {piles.revealed.length > 0 && (
-          <div className="revealed-strip" title="Revealed from hand">
+          <div
+            className={`revealed-strip${canActOnHand ? ' actionable' : ''}`}
+            title={
+              canActOnHand
+                ? `${player.name} is showing their hand — right-click a card to act on it`
+                : 'Revealed from hand'
+            }
+          >
             {piles.revealed.map((c) => {
               const p = pool[c.guid];
-              const face = p ? faceAt(p, 0) : null;
               return (
-                <img draggable={false}
+                <div
                   key={c.guid}
-                  src={face?.img || CARD_BACK_URL}
-                  alt={face?.name}
+                  className="rev-card"
+                  onContextMenu={canActOnHand ? revealedHandMenu(c.guid) : undefined}
                   onMouseEnter={() => p && useUI.getState().setHover({ pool: p, rotIndex: 0 })}
                   onMouseLeave={() => useUI.getState().setHover(null)}
-                />
+                >
+                  <CardView pool={p} />
+                </div>
               );
             })}
           </div>
@@ -307,27 +374,27 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         <div
           className="pile"
           data-drop={`library:${pid}`}
-          title={isMe ? 'Click: draw · drag top card out · right-click: library actions' : `${player.name}'s library`}
-          onClick={pileDrag.guardClick(() => isMe && actions.drawCards(1))}
+          title={
+            isMe
+              ? 'Click: draw · drag top card out · right-click: library actions'
+              : `${player.name}'s library — click to search · drag top card out`
+          }
+          onClick={pileDrag.guardClick(() =>
+            isMe
+              ? actions.drawCards(1)
+              : useUI.getState().openModal({ kind: 'search', ownerId: pid })
+          )}
           onContextMenu={libraryMenu}
           onPointerDown={
-            isMe && libraryCount > 0
-              ? pileDrag.start(
-                  topRevealedPool ? faceAt(topRevealedPool, 0)?.img || CARD_BACK_URL : CARD_BACK_URL,
-                  dropFromLibrary
-                )
+            libraryCount > 0
+              ? pileDrag.start(topRevealedPool ? { pool: topRevealedPool } : {}, dropFromLibrary)
               : undefined
           }
           onPointerMove={pileDrag.move}
           onPointerUp={pileDrag.end}
           onPointerCancel={pileDrag.cancel}
         >
-          {libraryCount > 0 &&
-            (topRevealedPool ? (
-              <img draggable={false} src={faceAt(topRevealedPool, 0)?.img || CARD_BACK_URL} alt="top of library (revealed)" />
-            ) : (
-              <img draggable={false} src={CARD_BACK_URL} alt="library" />
-            ))}
+          {libraryCount > 0 && <CardView pool={topRevealedPool} />}
           <span className="pile-count">{libraryCount}</span>
           <span className="pile-label">library</span>
         </div>
@@ -342,7 +409,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           onPointerDown={
             piles.gy[0]
               ? pileDrag.start(
-                  faceAt(pool[piles.gy[0].guid], piles.gy[0].rotIndex)?.img || CARD_BACK_URL,
+                  { pool: pool[piles.gy[0].guid], rotIndex: piles.gy[0].rotIndex },
                   dropFromPileCard(piles.gy[0].guid)
                 )
               : undefined
@@ -351,7 +418,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           onPointerUp={pileDrag.end}
           onPointerCancel={pileDrag.cancel}
         >
-          {piles.gy[0] && <img draggable={false} src={faceAt(pool[piles.gy[0].guid], piles.gy[0].rotIndex)?.img || CARD_BACK_URL} alt="graveyard top" />}
+          {piles.gy[0] && <CardView pool={pool[piles.gy[0].guid]} rotIndex={piles.gy[0].rotIndex} />}
           <span className="pile-count">{piles.gy.length}</span>
           <span className="pile-label">grave</span>
         </div>
@@ -366,7 +433,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           onPointerDown={
             piles.exile[0]
               ? pileDrag.start(
-                  faceAt(pool[piles.exile[0].guid], piles.exile[0].rotIndex)?.img || CARD_BACK_URL,
+                  { pool: pool[piles.exile[0].guid], rotIndex: piles.exile[0].rotIndex },
                   dropFromPileCard(piles.exile[0].guid)
                 )
               : undefined
@@ -375,7 +442,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           onPointerUp={pileDrag.end}
           onPointerCancel={pileDrag.cancel}
         >
-          {piles.exile[0] && <img draggable={false} src={faceAt(pool[piles.exile[0].guid], piles.exile[0].rotIndex)?.img || CARD_BACK_URL} alt="exile top" />}
+          {piles.exile[0] && <CardView pool={pool[piles.exile[0].guid]} rotIndex={piles.exile[0].rotIndex} />}
           <span className="pile-count">{piles.exile.length}</span>
           <span className="pile-label">exile</span>
         </div>
@@ -389,19 +456,14 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           title="Command zone (drag commander to battlefield to cast)"
           onPointerDown={
             piles.command[0]
-              ? pileDrag.start(
-                  faceAt(pool[piles.command[0].guid], 0)?.img || CARD_BACK_URL,
-                  dropFromPileCard(piles.command[0].guid)
-                )
+              ? pileDrag.start({ pool: pool[piles.command[0].guid] }, dropFromPileCard(piles.command[0].guid))
               : undefined
           }
           onPointerMove={pileDrag.move}
           onPointerUp={pileDrag.end}
           onPointerCancel={pileDrag.cancel}
         >
-          {piles.command[0] && (
-            <img draggable={false} src={faceAt(pool[piles.command[0].guid], 0)?.img || CARD_BACK_URL} alt="command zone" />
-          )}
+          {piles.command[0] && <CardView pool={pool[piles.command[0].guid]} />}
           <span className="pile-count">{piles.command.length}</span>
           <span className="pile-label">command</span>
         </div>
@@ -414,19 +476,12 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         </div>
       </div>
       {pileDrag.ghost && (
-        <img draggable={false}
-          src={pileDrag.ghost.img}
-          style={{
-            position: 'fixed',
-            left: pileDrag.ghost.x - 40,
-            top: pileDrag.ghost.y - 56,
-            width: 80,
-            borderRadius: 5,
-            opacity: 0.85,
-            pointerEvents: 'none',
-            zIndex: 80,
-            boxShadow: '0 6px 18px rgba(0,0,0,0.7)',
-          }}
+        <CardView
+          className="card-ghost"
+          pool={pileDrag.ghost.pool}
+          rotIndex={pileDrag.ghost.rotIndex ?? 0}
+          faceDown={!pileDrag.ghost.pool}
+          style={{ left: pileDrag.ghost.x - 40, top: pileDrag.ghost.y - 56 }}
         />
       )}
     </div>

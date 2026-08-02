@@ -27,7 +27,7 @@ export function Lobby() {
         rejoinKey: resp.rejoinKey,
         name: displayName,
       });
-      history.replaceState(null, '', `?room=${resp.roomCode}`);
+      // The URL sync lives in App, keyed off the session — one source of truth.
     } catch (err) {
       setError(String((err as Error).message ?? err));
     } finally {

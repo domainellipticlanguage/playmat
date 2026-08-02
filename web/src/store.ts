@@ -14,6 +14,7 @@ import {
   type SeatRecord,
   type SnapshotResponse,
   type StateEvent,
+  HIDDEN_ZONES,
   subjectKey,
   supersedes,
 } from '@playmat/shared';
@@ -197,27 +198,35 @@ export const useGame = create<GameStore>((set, get) => ({
           }
         }
 
-        // Z-6 integration: someone put a card into MY hidden zone. Fold it in.
-        if (
-          me &&
-          ev.by !== me &&
-          (ev.card.zone === 'library' || ev.card.zone === 'hand') &&
-          (ev.card.zoneOwnerId ?? ev.card.ownerId) === me &&
-          !state.hidden.library.includes(ev.card.guid) &&
-          !state.hidden.hand.includes(ev.card.guid)
-        ) {
-          const library = state.hidden.library.slice();
-          const hand = state.hidden.hand.slice();
-          if (ev.card.zone === 'hand') {
-            hand.push(ev.card.guid);
-          } else {
-            const pos = ev.card.libPos ?? 'top';
-            if (pos === 'top') library.unshift(ev.card.guid);
-            else if (pos === 'bottom') library.push(ev.card.guid);
-            else library.splice(Math.min(Math.max(pos, 0), library.length), 0, ev.card.guid);
+        // Z-6 integration. Only my own actions touch my hidden zones directly,
+        // so anything a peer does to them has to be folded in here. Three cases,
+        // handled as one remove-then-insert so they can't disagree:
+        //   in   — someone mills me, or tucks a card into my library
+        //   out  — someone discards from my hand (teaching mode)
+        //   both — someone moves my hand card onto my library
+        // Doing these as two independent blocks would double the card on the
+        // hidden->hidden case: the insert saw the guid still in `hand` and bailed.
+        if (me && ev.by !== me && !ev.card.del) {
+          const isMineNow =
+            state.hidden.library.includes(ev.card.guid) || state.hidden.hand.includes(ev.card.guid);
+          const landsWithMe =
+            HIDDEN_ZONES.includes(ev.card.zone) && (ev.card.zoneOwnerId ?? ev.card.ownerId) === me;
+          if (isMineNow || landsWithMe) {
+            const library = state.hidden.library.filter((g) => g !== ev.card.guid);
+            const hand = state.hidden.hand.filter((g) => g !== ev.card.guid);
+            if (landsWithMe) {
+              if (ev.card.zone === 'hand') {
+                hand.push(ev.card.guid);
+              } else {
+                const pos = ev.card.libPos ?? 'top';
+                if (pos === 'top') library.unshift(ev.card.guid);
+                else if (pos === 'bottom') library.push(ev.card.guid);
+                else library.splice(Math.min(Math.max(pos, 0), library.length), 0, ev.card.guid);
+              }
+            }
+            patch.hidden = { library, hand };
+            patch.hiddenSeq = state.hiddenSeq + 1;
           }
-          patch.hidden = { library, hand };
-          patch.hiddenSeq = state.hiddenSeq + 1;
         }
         break;
       }

@@ -4,11 +4,12 @@ import { newGuid, parseDecklist } from '@playmat/shared';
 import { useGame } from '../store';
 import { useUI, type ModalState } from '../uiStore';
 import * as actions from '../actions';
-import { CARD_BACK_URL, deckColorIdentity, faceAt, manaSymbolUrl, useCustomDisplay } from '../cards';
+import { deckColorIdentity, manaSymbolUrl } from '../cards';
 import { resolveDeckByNames, resolveByIds, searchTokens, toPoolCard, type ScryfallCard } from '../scryfall';
 import { fetchArchidektDeck, parseArchidektUrl } from '../archidekt';
 import { persisted } from '../session';
 import { homePosition, TABLE } from '../view';
+import { CardView } from './CardView';
 
 function Backdrop({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
@@ -65,10 +66,9 @@ function PeekModal({ count, onClose }: { count: number; onClose: () => void }) {
       <div className="card-grid">
         {order.map((guid, i) => {
           const p = pool[guid];
-          const face = p ? faceAt(p, 0) : null;
           return (
             <div key={guid} className="gcard">
-              <img src={face?.img || CARD_BACK_URL} alt={face?.name} />
+              <CardView pool={p} />
               <div className="glabel">#{i + 1} → {dests[guid]}</div>
               <div className="gactions">
                 <button className="small" onClick={() => move(guid, -1)}>◀ earlier</button>
@@ -102,10 +102,16 @@ function PeekModal({ count, onClose }: { count: number; onClose: () => void }) {
 // Search library (C-8 / Archidekt-style)
 // ---------------------------------------------------------------------------
 
-function SearchModal({ onClose }: { onClose: () => void }) {
+function SearchModal({ ownerId, onClose }: { ownerId?: string; onClose: () => void }) {
   const pool = useGame((s) => s.pool);
-  const library = useGame((s) => s.hidden.library);
   const session = useGame((s) => s.session);
+  const players = useGame((s) => s.players);
+  const myLibrary = useGame((s) => s.hidden.library);
+  // A peer's order arrives on their PlayerState; mine is authoritative locally.
+  const theirLibrary = useGame((s) => (ownerId ? s.playerStates[ownerId]?.library : undefined));
+  const isMine = !ownerId || ownerId === session?.playerId;
+  const library = isMine ? myLibrary : theirLibrary ?? [];
+  const ownerName = isMine ? 'your' : `${players.find((p) => p.playerId === ownerId)?.name ?? '?'}'s`;
   const [q, setQ] = useState('');
   const [touched, setTouched] = useState(false);
 
@@ -121,7 +127,9 @@ function SearchModal({ onClose }: { onClose: () => void }) {
   const take = (guid: string, where: 'hand' | 'battlefield' | 'graveyard' | 'command') => {
     setTouched(true);
     if (where === 'battlefield') {
-      const seat = session?.seat ?? 0;
+      // Land it on the OWNER's side of the table — they still control it.
+      const seat =
+        players.find((p) => p.playerId === (ownerId ?? session?.playerId))?.seat ?? session?.seat ?? 0;
       actions.moveCard(guid, { zone: 'battlefield', ...homePosition(seat, Math.floor(Math.random() * 7)) });
     } else {
       actions.moveCard(guid, { zone: where });
@@ -129,22 +137,23 @@ function SearchModal({ onClose }: { onClose: () => void }) {
   };
 
   const close = () => {
-    // Convention: searching a library means shuffling it afterwards.
-    if (touched) actions.shuffleLibrary();
+    // Convention: searching a library means shuffling it afterwards. Only the
+    // owner holds the authoritative order, so searching someone else's leaves
+    // the shuffle to them — the log line above tells them to.
+    if (touched && isMine) actions.shuffleLibrary();
     onClose();
   };
 
   return (
     <Backdrop onClose={close}>
-      <h3>Search your library ({library.length})</h3>
+      <h3>Search {ownerName} library ({library.length})</h3>
       <input autoFocus placeholder="Filter by name…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="card-grid">
         {shown.map((guid) => {
           const p = pool[guid];
-          const face = p ? faceAt(p, 0) : null;
           return (
             <div key={guid} className="gcard">
-              <img src={face?.img || CARD_BACK_URL} alt={face?.name} loading="lazy" />
+              <CardView pool={p} />
               <div className="gactions">
                 <button className="small" onClick={() => take(guid, 'hand')}>to hand</button>
                 <button className="small" onClick={() => take(guid, 'battlefield')}>battlefield</button>
@@ -157,9 +166,13 @@ function SearchModal({ onClose }: { onClose: () => void }) {
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
         <span className="glabel" style={{ color: 'var(--ink-dim)', alignSelf: 'center' }}>
-          {touched ? 'Library will shuffle when you close.' : 'Take a card and the library shuffles on close.'}
+          {!isMine
+            ? 'Cards go to their owner. Ask them to shuffle when you\'re done.'
+            : touched
+              ? 'Library will shuffle when you close.'
+              : 'Take a card and the library shuffles on close.'}
         </span>
-        <button className="primary" onClick={close}>Close{touched ? ' & shuffle' : ''}</button>
+        <button className="primary" onClick={close}>Close{touched && isMine ? ' & shuffle' : ''}</button>
       </div>
     </Backdrop>
   );
@@ -200,11 +213,10 @@ function ZoneModal({
       <div className="card-grid">
         {list.map((c) => {
           const p = pool[c.guid];
-          const face = p ? faceAt(p, c.rotIndex) : null;
           const tax = c.counters['tax'] ?? 0;
           return (
             <div key={c.guid} className="gcard">
-              <img src={face?.img || CARD_BACK_URL} alt={face?.name} />
+              <CardView pool={p} rotIndex={c.rotIndex} />
               {zone === 'command' && (
                 <div className="glabel">
                   commander tax: {tax * 2 > 0 ? `+${tax * 2}` : '0'}{' '}
@@ -222,15 +234,17 @@ function ZoneModal({
                 >
                   battlefield
                 </button>
-                <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'hand', zoneOwnerId: c.ownerId })}>owner's hand</button>
+                {/* Destination owner is implicit now — moveCard always routes a
+                    card to its own owner's zones. */}
+                <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'hand' })}>owner's hand</button>
                 {zone !== 'graveyard' && (
                   <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'graveyard' })}>graveyard</button>
                 )}
                 {zone !== 'exile' && (
                   <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'exile' })}>exile</button>
                 )}
-                <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'library', zoneOwnerId: c.ownerId, libPos: 'top' })}>library top</button>
-                <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'library', zoneOwnerId: c.ownerId, libPos: 'bottom' })}>library bottom</button>
+                <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'library', libPos: 'top' })}>library top</button>
+                <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'library', libPos: 'bottom' })}>library bottom</button>
               </div>
             </div>
           );
@@ -261,19 +275,19 @@ const QUICK_TOKENS: { label: string; q: string }[] = [
 ];
 
 function CustomPreview({ data }: { data: Record<string, unknown> }) {
-  // Live preview: re-render 350ms after the last edit. The previous image
-  // stays up while crucible draws the new one, so it never flickers.
+  // Live preview: re-render 350ms after the last edit. CardView keeps the
+  // previous image up while crucible draws the new one, so it never flickers.
   const json = JSON.stringify(data);
   const [settled, setSettled] = useState(json);
   useEffect(() => {
     const t = setTimeout(() => setSettled(json), 350);
     return () => clearTimeout(t);
   }, [json]);
-  const preview = useCustomDisplay({ guid: `preview-${settled}`, ownerId: '', custom: JSON.parse(settled) });
-  return preview ? (
-    <img src={preview.frontFaceImageUrl} style={{ width: 220, borderRadius: 8, alignSelf: 'flex-start' }} />
-  ) : (
-    <div className="subtle" style={{ width: 220 }}>rendering…</div>
+  return (
+    <CardView
+      pool={{ guid: `preview-${settled}`, ownerId: '', custom: JSON.parse(settled) }}
+      style={{ width: 220, alignSelf: 'flex-start' }}
+    />
   );
 }
 
@@ -295,6 +309,12 @@ function TokenModal({ at, onClose }: { at: { x: number; y: number }; onClose: ()
   const [colors, setColors] = useState<string[]>([]);
 
   const me = session?.playerId ?? '';
+
+  // Pool-shaped copies of the search results so they render via CardView.
+  const resultPools = useMemo(
+    () => new Map(results.map((c) => [c.id, toPoolCard(c, '', false, true)])),
+    [results]
+  );
 
   /** Crucible CardData for the custom token. Colors drive typeLineColor
    * only — no accentColor, no color indicator. */
@@ -370,7 +390,7 @@ function TokenModal({ at, onClose }: { at: { x: number; y: number }; onClose: ()
           <div className="card-grid">
             {results.map((card) => (
               <div key={card.id} className="gcard">
-                <img src={card.image_uris?.normal ?? card.card_faces?.[0]?.image_uris?.normal ?? CARD_BACK_URL} alt={card.name} loading="lazy" />
+                <CardView pool={resultPools.get(card.id)} />
                 <div className="glabel">{card.name}</div>
                 <div className="gactions">
                   <button className="small" onClick={() => spawn(card, 1)}>create 1</button>
@@ -717,19 +737,17 @@ function OpeningHandModal({ onClose }: { onClose: () => void }) {
       <div className="card-grid">
         {hand.map((guid) => {
           const p = pool[guid];
-          const face = p ? faceAt(p, 0) : null;
           const dest = dests[guid] ?? 'keep';
           return (
             <div key={guid} className="gcard" onClick={() => cycle(guid)} style={{ cursor: 'pointer' }}>
-              <img
-                src={face?.img || CARD_BACK_URL}
-                alt={face?.name}
-                draggable={false}
+              <CardView
+                pool={p}
                 style={
                   dest === 'keep'
                     ? undefined
                     : {
                         outline: `3px solid ${dest === 'bottom' ? 'var(--warn)' : 'var(--danger)'}`,
+                        borderRadius: 12,
                         opacity: 0.65,
                       }
                 }
@@ -846,7 +864,7 @@ export function ModalHost() {
     case 'peek':
       return <PeekModal count={modal.count} onClose={close} />;
     case 'search':
-      return <SearchModal onClose={close} />;
+      return <SearchModal ownerId={modal.ownerId} onClose={close} />;
     case 'zone':
       return <ZoneModal zone={modal.zone} zoneOwnerId={modal.zoneOwnerId} onClose={close} />;
     case 'tokens':

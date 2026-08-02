@@ -1,10 +1,14 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ZoneName } from '@playmat/shared';
 import { useGame } from '../store';
 import { useUI } from '../uiStore';
 import * as actions from '../actions';
-import { faceAt } from '../cards';
-import { CARD_BACK_URL } from '../cards';
 import { liveView, screenToWorld } from '../view';
+import { CardView } from './CardView';
+
+/** Resting overlap, and the tightest we'll squeeze before cards get ungrabbable. */
+const REST_OVERLAP = -14;
+const MAX_OVERLAP = -46;
 
 export function Hand() {
   const hand = useGame((s) => s.hidden.hand);
@@ -13,6 +17,31 @@ export function Hand() {
   const me = useGame((s) => s.session?.playerId);
   const [ghost, setGhost] = useState<{ guid: string; x: number; y: number } | null>(null);
   const dragRef = useRef<{ guid: string; startX: number; startY: number; moved: boolean } | null>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [overlap, setOverlap] = useState(REST_OVERLAP);
+
+  // Squeeze the fan to whatever width the strip actually has. Each card
+  // contributes (width + 2 * margin) to the flex row, so solving that for the
+  // available width gives the overlap that exactly fits. Without this a hand
+  // wider than the strip spills past both ends and .table-main clips it away.
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const fit = () => {
+      const avail = el.clientWidth - 16; // .hand-strip padding
+      const n = hand.length;
+      if (n < 2 || avail <= 0) return setOverlap(REST_OVERLAP);
+      // Measured, not hardcoded: .hand-card width changes with the compact
+      // media query, and the strip resizes with the window either way.
+      const cardW = el.querySelector<HTMLElement>('.hand-card')?.offsetWidth ?? 108;
+      const exact = (avail / n - cardW) / 2;
+      setOverlap(Math.max(MAX_OVERLAP, Math.min(REST_OVERLAP, exact)));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hand.length]);
 
   const onPointerDown = (guid: string) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -41,7 +70,11 @@ export function Hand() {
     const zoneTarget = dropEl?.closest('[data-drop]') as HTMLElement | null;
     if (zoneTarget) {
       const [zone, zoneOwnerId] = zoneTarget.dataset.drop!.split(':');
-      if (zone !== 'hand') actions.moveCard(d.guid, { zone: zone as never, zoneOwnerId: zoneOwnerId || undefined });
+      // Dropping on another player's pile is a no-op rather than a move home:
+      // a card only ever enters its own owner's zones.
+      if (zone !== 'hand' && actions.canPlaceIn(d.guid, zone as ZoneName, zoneOwnerId || undefined)) {
+        actions.moveCard(d.guid, { zone: zone as ZoneName });
+      }
       return;
     }
     if (dropEl?.closest('.battlefield-viewport')) {
@@ -78,10 +111,14 @@ export function Hand() {
 
   return (
     <>
-      <div className="hand-strip" data-drop={`hand:${me ?? ''}`}>
+      <div
+        ref={stripRef}
+        className="hand-strip"
+        data-drop={`hand:${me ?? ''}`}
+        style={{ '--hand-overlap': `${overlap}px` } as React.CSSProperties}
+      >
         {hand.map((guid) => {
           const p = pool[guid];
-          const face = p ? faceAt(p, 0) : null;
           const revealed = cards[guid]?.revealed && cards[guid]?.zone === 'hand';
           return (
             <div
@@ -94,25 +131,16 @@ export function Hand() {
               onMouseEnter={() => p && useUI.getState().setHover({ pool: p, rotIndex: 0 })}
               onMouseLeave={() => useUI.getState().setHover(null)}
             >
-              <img src={face?.img || CARD_BACK_URL} alt={face?.name ?? 'card'} draggable={false} />
+              <CardView pool={p} />
             </div>
           );
         })}
       </div>
       {ghost && (
-        <img
-          src={pool[ghost.guid] ? faceAt(pool[ghost.guid], 0)?.img : CARD_BACK_URL}
-          style={{
-            position: 'fixed',
-            left: ghost.x - 40,
-            top: ghost.y - 56,
-            width: 80,
-            borderRadius: 5,
-            opacity: 0.85,
-            pointerEvents: 'none',
-            zIndex: 80,
-            boxShadow: '0 6px 18px rgba(0,0,0,0.7)',
-          }}
+        <CardView
+          className="card-ghost"
+          pool={pool[ghost.guid]}
+          style={{ left: ghost.x - 40, top: ghost.y - 56 }}
         />
       )}
     </>

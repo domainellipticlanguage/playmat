@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import type { CardState, ZoneName } from '@playmat/shared';
 import { useGame } from '../store';
 import { useUI } from '../uiStore';
 import { sendEphemeral } from '../connection';
@@ -39,6 +41,8 @@ export function Battlefield() {
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const [view, setView] = useState<ViewTransform>({ k: 0.3, theta: 0, cx: 400, cy: 300 });
+  /** Viewport box in page coords, so the drag layer can sit exactly on top. */
+  const [vpBox, setVpBox] = useState({ left: 0, top: 0, width: 0, height: 0 });
   const [dragPositions, setDragPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -55,6 +59,7 @@ export function Battlefield() {
     if (!el) return;
     const fit = () => {
       const r = el.getBoundingClientRect();
+      setVpBox({ left: r.left, top: r.top, width: r.width, height: r.height });
       setView((v) => ({
         k: v.k > 0.05 && v.k !== 0.3 ? v.k : (Math.min(r.width, r.height) / TABLE) * 0.96,
         theta,
@@ -110,6 +115,12 @@ export function Battlefield() {
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (useUI.getState().ctxMenu) return;
+    // A card's crucible menu portals into <body>, but React still bubbles its
+    // pointerdown through this component tree. Left unhandled we fall to the
+    // marquee branch below and setPointerCapture on the viewport, which steals
+    // the pointerup — so the menu item never receives a click and every entry
+    // looks dead. The menu stops mousedown, not pointerdown, hence this guard.
+    if ((e.target as HTMLElement).closest('.mtg-card-menu, .ctx-menu')) return;
     const local = toLocal(e);
     const world = screenToWorld(view, local.x, local.y);
     const cardEl = (e.target as HTMLElement).closest('[data-guid]') as HTMLElement | null;
@@ -210,7 +221,11 @@ export function Battlefield() {
       if (target) {
         const [zone, zoneOwnerId] = target.dataset.drop!.split(':');
         for (const g of drag.guids) {
-          actions.moveCard(g, { zone: zone as never, zoneOwnerId: zoneOwnerId || undefined });
+          // Another player's pile rejects the drop (the card snaps back) rather
+          // than quietly rerouting to your own zone of the same kind.
+          if (actions.canPlaceIn(g, zone as ZoneName, zoneOwnerId || undefined)) {
+            actions.moveCard(g, { zone: zone as ZoneName });
+          }
         }
       } else {
         const moves = drag.guids
@@ -275,6 +290,26 @@ export function Battlefield() {
 
   const faceAngleOverride = prefs.faceOpponentCards ? seatAngle(mySeat) : null;
   const surfaceInset = 60;
+  const worldTransform = `translate(${view.cx}px, ${view.cy}px) rotate(${view.theta}deg) scale(${view.k}) translate(${-TABLE / 2}px, ${-TABLE / 2}px)`;
+
+  const renderCard = (c: CardState) => (
+    <TableCard
+      key={c.guid}
+      card={c}
+      pool={pool[c.guid]}
+      seatOfController={seatOf.get(c.controllerId) ?? 0}
+      dragPos={dragPositions[c.guid] ?? null}
+      remoteDrag={drags[c.guid] && !dragPositions[c.guid] ? drags[c.guid] : null}
+      selected={selection.includes(c.guid)}
+      faceAngleOverride={faceAngleOverride}
+      ownerColor={OWNER_COLORS[seatOf.get(c.ownerId) ?? 0] ?? '#888'}
+    />
+  );
+
+  // Cards under my pointer right now move to an overlay above the player HUDs
+  // (see .drag-layer) so they don't slide beneath someone's life total
+  // mid-drag. Only local drags — a peer's drag ghost stays in the world.
+  const lifted = battlefieldCards.filter((c) => dragPositions[c.guid]);
 
   return (
     <div
@@ -288,12 +323,7 @@ export function Battlefield() {
         if (!(e.target as HTMLElement).closest('[data-guid]')) e.preventDefault();
       }}
     >
-      <div
-        className="world"
-        style={{
-          transform: `translate(${view.cx}px, ${view.cy}px) rotate(${view.theta}deg) scale(${view.k}) translate(${-TABLE / 2}px, ${-TABLE / 2}px)`,
-        }}
-      >
+      <div className="world" style={{ transform: worldTransform }}>
         <div
           className="table-surface"
           style={{
@@ -304,19 +334,7 @@ export function Battlefield() {
             backgroundImage: 'var(--table-image, url(/table.jpg))',
           }}
         />
-        {battlefieldCards.map((c) => (
-          <TableCard
-            key={c.guid}
-            card={c}
-            pool={pool[c.guid]}
-            seatOfController={seatOf.get(c.controllerId) ?? 0}
-            dragPos={dragPositions[c.guid] ?? null}
-            remoteDrag={drags[c.guid] && !dragPositions[c.guid] ? drags[c.guid] : null}
-            selected={selection.includes(c.guid)}
-            faceAngleOverride={faceAngleOverride}
-            ownerColor={OWNER_COLORS[seatOf.get(c.ownerId) ?? 0] ?? '#888'}
-          />
-        ))}
+        {battlefieldCards.filter((c) => !dragPositions[c.guid]).map(renderCard)}
         {Object.entries(cursors).map(([pid, cur]) => (
           <div
             key={pid}
@@ -343,6 +361,20 @@ export function Battlefield() {
         click: tap · drag: move · shift-click: multi-select · drag empty: box select ·
         right-drag: pan · scroll or pinch: zoom
       </div>
+      {lifted.length > 0 &&
+        createPortal(
+          <div
+            className="drag-layer"
+            style={{ left: vpBox.left, top: vpBox.top, width: vpBox.width, height: vpBox.height }}
+          >
+            {/* Same transform as the real world, so the card doesn't shift a
+                pixel when it moves between the two layers. */}
+            <div className="world" style={{ transform: worldTransform }}>
+              {lifted.map(renderCard)}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

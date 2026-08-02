@@ -71,6 +71,11 @@ function myPlayerState(patch: Partial<PlayerState> = {}): PlayerState {
   const merged = { ...base, ...patch };
   merged.handCount = s.hidden.hand.length;
   merged.libraryCount = s.hidden.library.length;
+  // Library order goes out with every publish so peers can browse/search it
+  // like any other zone. My hand stays private — only the count ships.
+  merged.library = s.hidden.library;
+  // Peers need this to know whether my hand is open for them to act on.
+  merged.showHandToTable = s.prefs.showHandToTable;
   if (merged.topRevealed !== null) merged.topRevealed = s.hidden.library[0] ?? null;
   return merged;
 }
@@ -197,18 +202,40 @@ export function drawCards(n: number): void {
 
 export interface MoveTarget {
   zone: ZoneName;
-  zoneOwnerId?: string;
   x?: number;
   y?: number;
   libPos?: 'top' | 'bottom' | number;
   faceDown?: boolean;
 }
 
+/** Whoever physically owns this card, per the pool (falling back to its state). */
+export function ownerOf(guid: string): string {
+  const { s, me } = ctx();
+  return s.pool[guid]?.ownerId ?? s.cards[guid]?.ownerId ?? me;
+}
+
+/**
+ * May this card be placed into `zone` belonging to `zoneOwnerId`?
+ *
+ * A card only ever occupies its OWNER's graveyard/library/hand/exile/command —
+ * milling an opponent puts cards in THEIR graveyard, and nothing of yours can
+ * end up in their deck. The battlefield is the exception: controllerId lets you
+ * steal a permanent and it sits on your side of the table.
+ */
+export function canPlaceIn(guid: string, zone: ZoneName, zoneOwnerId?: string): boolean {
+  if (zone === 'battlefield' || !zoneOwnerId) return true;
+  return ownerOf(guid) === zoneOwnerId;
+}
+
 /** The universal move (C-11, Z-6). Handles hidden<->public bookkeeping. */
 export function moveCard(guid: string, target: MoveTarget): void {
   const { s, me } = ctx();
   const cur = currentCard(guid);
-  const zoneOwnerId = target.zoneOwnerId ?? s.pool[guid]?.ownerId ?? cur.ownerId;
+  // Not caller-supplied: the destination zone's owner IS the card's owner for
+  // every non-battlefield zone, so a mis-aimed drop can't relocate a card into
+  // someone else's deck. Callers should gate on canPlaceIn() to avoid a
+  // surprise teleport home; this is the backstop that makes it impossible.
+  const zoneOwnerId = ownerOf(guid);
   const wasPublic = !!s.cards[guid] && !HIDDEN_ZONES.includes(s.cards[guid].zone);
   const fromHidden = removeFromHidden(guid);
 
@@ -304,7 +331,10 @@ export function setShowHandToTable(on: boolean): void {
   for (const guid of s.hidden.hand) {
     events.push(cardEvent({ ...currentCard(guid), zone: 'hand', zoneOwnerId: me, revealed: on }));
   }
-  if (events.length) sendState(events);
+  // Publish the flag itself, not just the reveals — peers gate whether they may
+  // act on my hand on this, and an empty hand would otherwise announce nothing.
+  events.push(playerEvent(myPlayerState()));
+  sendState(events);
 }
 
 // --- Library operations -----------------------------------------------------
@@ -339,6 +369,16 @@ export function setTopRevealed(on: boolean): void {
 }
 
 // --- Player state -----------------------------------------------------------
+
+/**
+ * Republish my hidden-zone counts. Needed when my hand or library changed
+ * without one of my own actions driving it — e.g. another player discarded a
+ * card from my hand in teaching mode. connection.ts calls this when it notices
+ * the published counts have drifted from the real ones.
+ */
+export function publishMyCounts(): void {
+  sendState([playerEvent(myPlayerState())]);
+}
 
 export function setLife(playerId: string, life: number): void {
   const { me } = ctx();

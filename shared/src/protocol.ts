@@ -79,8 +79,28 @@ export interface PlayerState {
   commanderDamage: Record<string, number>;
   handCount: number;
   libraryCount: number;
+  /**
+   * This player's library order, index 0 = top. Published so every client can
+   * browse and pull from any library, the same as graveyard/exile/command —
+   * otherwise the library is the one zone you can't touch on another player's
+   * board.
+   *
+   * This is a deliberate honor-system trade, matching "you may set an
+   * opponent's life": every client now holds every deck's exact order, so a
+   * player who goes looking can see their own next draw. The owner's hand stays
+   * private (only `handCount`, plus individually revealed cards).
+   *
+   * Optional so snapshots written before this field still load.
+   */
+  library?: string[];
   /** Guid of the library top card while playing "with top revealed", else null. */
   topRevealed: string | null;
+  /**
+   * Teaching mode: this player's hand is continuously revealed to the table AND
+   * open for other players to act on (play/discard/tuck on their behalf).
+   * Optional so snapshots written before this field still load.
+   */
+  showHandToTable?: boolean;
 }
 
 export interface RoomState {

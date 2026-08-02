@@ -170,6 +170,21 @@ export async function startSession(session: StoredSession): Promise<void> {
     if (s.hiddenSeq !== prev.hiddenSeq) {
       if (hiddenDebounce) clearTimeout(hiddenDebounce);
       hiddenDebounce = setTimeout(() => persistHiddenNow(session), 600);
+      // My hidden zones can also change without me acting: in teaching mode
+      // another player may discard from my hand, and the store folds that in.
+      // Republish the counts when they've drifted so peers don't show a stale
+      // hand size. My own actions already publish correct counts, so this is a
+      // no-op for them.
+      const me = s.session?.playerId;
+      const mine = me ? s.playerStates[me] : undefined;
+      if (
+        mine &&
+        (mine.handCount !== s.hidden.hand.length || mine.libraryCount !== s.hidden.library.length)
+      ) {
+        queueMicrotask(() => {
+          void import('./actions').then((a) => a.publishMyCounts());
+        });
+      }
     }
     const gid = s.room?.gameId;
     if (gid && gid !== prev.room?.gameId) {

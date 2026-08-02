@@ -4,7 +4,7 @@
  * bookkeeping, with the network mocked out.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PoolCard, StateEvent } from '@playmat/shared';
+import type { CardState, PoolCard, StateEvent } from '@playmat/shared';
 
 // Capture published events; apply them optimistically exactly like the real
 // sendState does, so actions behave as in the browser.
@@ -201,6 +201,85 @@ describe('hidden-zone bookkeeping', () => {
     const s = useGame.getState();
     expect(s.hidden.library[0]).toBe('gift');
     expect(s.hidden.library).toHaveLength(libBefore.length + 1);
+  });
+
+  /** A card event the foe publishes about one of MY cards (teaching mode). */
+  const foeMoves = (guid: string, patch: Partial<CardState>): StateEvent => ({
+    t: 'card', g: useGame.getState().room!.gameId, by: FOE, seq: 90,
+    card: {
+      guid, zone: 'graveyard', ownerId: ME, controllerId: ME, x: 0, y: 0,
+      tapped: false, faceDown: false, faceIndex: 0, rotIndex: 0, counters: {}, order: 1,
+      ...patch,
+    },
+  });
+
+  it('teaching mode: a peer discarding from my hand drops it from my hand', () => {
+    actions.drawCards(1);
+    const guid = useGame.getState().hidden.hand[0];
+    const before = useGame.getState().hidden.hand.length;
+    useGame.getState().applyStateEvent(foeMoves(guid, { zone: 'graveyard' }));
+    const s = useGame.getState();
+    expect(s.hidden.hand).not.toContain(guid);
+    expect(s.hidden.hand).toHaveLength(before - 1);
+  });
+
+  it('teaching mode: a peer tucking my hand card lands it in my library exactly once', () => {
+    actions.drawCards(1);
+    const guid = useGame.getState().hidden.hand[0];
+    const libBefore = useGame.getState().hidden.library.length;
+    useGame.getState().applyStateEvent(
+      foeMoves(guid, { zone: 'library', zoneOwnerId: ME, libPos: 'top' })
+    );
+    const s = useGame.getState();
+    // hidden -> hidden is the case a naive remove/insert pair gets wrong: the
+    // insert bails because the guid is still in `hand`, so the card doubles.
+    expect(s.hidden.hand).not.toContain(guid);
+    expect(s.hidden.library.filter((g) => g === guid)).toHaveLength(1);
+    expect(s.hidden.library).toHaveLength(libBefore + 1);
+    expect(s.hidden.library[0]).toBe(guid);
+  });
+
+  it('a card may only be placed in its own owner\'s non-battlefield zones', () => {
+    const guid = useGame.getState().hidden.library[0];
+    expect(actions.canPlaceIn(guid, 'graveyard', ME)).toBe(true);
+    expect(actions.canPlaceIn(guid, 'graveyard', FOE)).toBe(false);
+    expect(actions.canPlaceIn(guid, 'library', FOE)).toBe(false);
+    expect(actions.canPlaceIn(guid, 'hand', FOE)).toBe(false);
+    // The battlefield is exempt: you may control an opponent's permanent.
+    expect(actions.canPlaceIn(guid, 'battlefield', FOE)).toBe(true);
+  });
+
+  it('publishes my library order so peers can browse it, but never my hand', () => {
+    actions.drawCards(1);
+    const s = useGame.getState();
+    const mine = s.playerStates[ME];
+    expect(mine.library).toEqual(s.hidden.library);
+    expect(mine.libraryCount).toBe(s.hidden.library.length);
+    // The hand ships as a count only — no card identities.
+    expect(mine.handCount).toBe(s.hidden.hand.length);
+    expect(mine).not.toHaveProperty('hand');
+  });
+
+  it('a peer pulling from my library drops it from my hidden order', () => {
+    const top = useGame.getState().hidden.library[0];
+    const before = useGame.getState().hidden.library.length;
+    useGame.getState().applyStateEvent(foeMoves(top, { zone: 'graveyard' }));
+    const s = useGame.getState();
+    expect(s.hidden.library).not.toContain(top);
+    expect(s.hidden.library).toHaveLength(before - 1);
+  });
+
+  it('moving a peer-owned card sends it to THEIR zone, never mine', () => {
+    useGame.setState({
+      pool: { ...useGame.getState().pool, foecard: { guid: 'foecard', ownerId: FOE } },
+    });
+    actions.moveCard('foecard', { zone: 'graveyard' });
+    const s = useGame.getState();
+    const c = s.cards['foecard'];
+    expect(c.zone).toBe('graveyard');
+    expect(c.zoneOwnerId ?? c.ownerId).toBe(FOE);
+    expect(s.hidden.hand).not.toContain('foecard');
+    expect(s.hidden.library).not.toContain('foecard');
   });
 });
 

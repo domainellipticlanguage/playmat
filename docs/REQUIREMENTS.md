@@ -77,12 +77,13 @@ Supported zones, per player: **library, hand, battlefield, graveyard, exile, com
 
 | ID | Requirement |
 |---|---|
-| Z-1 | Library is ordered and face-down. Its contents are visible only to its owner, and only via explicit actions (§4.4). |
-| Z-2 | Hand is unordered from other players' perspective and hidden from them; only the card count is public. |
+| Z-1 | Library is ordered and rendered face-down, but its order is published to the table so any player can browse, search, and pull from any library — the same reach they have over a graveyard. See §7.3 for the honor-system trade this accepts. |
+| Z-2 | Hand is unordered from other players' perspective and hidden from them; only the card count is public. Exception: teaching mode (C-13). |
 | Z-3 | Battlefield is a free-positioning surface. Each player has a nominal region, but cards may be placed anywhere (control changes, shared board effects). |
 | Z-4 | Graveyard and exile are ordered, public, and expandable to a full list view. |
 | Z-5 | Command zone is public and displays commander tax as a manual counter. |
-| Z-6 | Any card can be moved to any zone of any player, including another player's library at a chosen position (top / bottom / Nth from top). |
+| Z-6 | A card only ever occupies **its own owner's** library, hand, graveyard, exile, and command zone. Milling or discarding another player's card puts it in *their* zone; nothing of yours can end up in their deck. The battlefield is the sole exception — `controllerId` lets you take control of an opponent's permanent. A drop onto another player's pile is refused rather than silently rerouted. |
+| Z-7 | Reordering a library (shuffle, scry, peek) stays with its owner: only the owner's client holds the authoritative array, so another player searching a library leaves the shuffle to them. |
 
 Throwing this out there: In terms of implementation, for private actions, we just don't publish an event.
 
@@ -97,11 +98,12 @@ Throwing this out there: In terms of implementation, for private actions, we jus
 | C-5 | Add, remove, and set arbitrary named counters on a card (+1/+1, loyalty, charge, custom label). |
 | C-6 | ~~Attach a card to another card to represent an aura or equipment; attached cards move with their host.~~ (Hmm I'm not sure about this - I think maybe we should allow click and drag for an area select, then you can move things around in a group)|
 | C-7 | Create token copies of a card, or create a token by searching Scryfall's token set. |
-| C-8 | Peek at the top N cards of a library (owner only), reorder them, and return them to the top or bottom — covering scry, surveil, and tutoring. |
-| C-9 | Shuffle a library. |
+| C-8 | Peek at the top N cards of a library (owner only — reordering is owner-only per Z-7), reorder them, and return them to the top or bottom — covering scry, surveil, and tutoring. |
+| C-9 | Shuffle a library (owner only, Z-7). |
 | C-10 | Reveal a card from a hidden zone to all players. |
-| C-11 | Move a card between any two zones via drag or a context menu. |
+| C-11 | Move a card between any two zones via drag or a context menu, subject to Z-6. |
 | C-12 | Group-select multiple battlefield cards and move them together. |
+| C-13 | Teaching mode: a player may continuously reveal their hand to the table. While it is on, **other players may act on that hand** — play, discard, exile, or tuck a card on the owner's behalf. Every such move still resolves into the owner's own zones (Z-6). |
 
 ### 4.5 Game state
 
@@ -216,9 +218,11 @@ E-1 through E-3 together mean a dropped or reordered event is corrected by the n
 
 ### 7.3 Hidden information — accepted limitation
 
-Hand and library contents are delivered to their owner over the `private` channel, and other players are not subscribed to it. This prevents accidental disclosure — a player cannot see an opponent's hand through the UI, and the browser of a non-owner never receives those cards.
+**Hand** contents stay with their owner: peers receive only `handCount`, plus any card individually revealed (C-10) or the whole hand under teaching mode (C-13).
 
-It does **not** prevent a determined cheat. A player can inspect their own library order via devtools even without a UI affordance for it, and there is no server-side enforcement that a drawn card is the actual top card, because there is no rules engine to define what "the top card" means for a given action.
+**Library** contents are deliberately *not* hidden. Each player's library order ships on their `PlayerState`, so every client holds every deck's exact order (Z-1). This buys interaction parity — a library can be browsed, searched, and pulled from exactly like a graveyard, instead of being the one zone on another player's board you cannot touch. The cost is real and worth stating plainly: **a player who goes looking can see their own next draw.** The UI never shows you your own library order except through explicit actions (search, scry, peek), but nothing stops devtools.
+
+It does **not** prevent a determined cheat, and after the Z-1 change it does not even prevent a casual one. There is also no server-side enforcement that a drawn card is the actual top card, because there is no rules engine to define what "the top card" means for a given action.
 
 This is consistent with §1.1.3: Playmat is for playing with people you know, and offers exactly the protection a physical table does, which is to say the protection of not wanting to cheat. Any product decision to serve strangers requires revisiting this.
 

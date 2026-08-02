@@ -14,7 +14,8 @@ export interface HoverInfo {
 export type ModalState =
   | { kind: 'none' }
   | { kind: 'peek'; count: number; mode: 'scry' | 'surveil' | 'peek' }
-  | { kind: 'search' }
+  /** Browse/search a library. Omit ownerId for your own. */
+  | { kind: 'search'; ownerId?: string }
   | { kind: 'tokens'; at: { x: number; y: number } }
   | { kind: 'zone'; zone: 'graveyard' | 'exile' | 'command'; zoneOwnerId: string }
   | { kind: 'confirm'; title: string; body: string; onConfirm: () => void }

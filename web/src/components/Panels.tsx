@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGame } from '../store';
 import { useUI } from '../uiStore';
-import { faceAt, effectivePT, useCustomDisplay, zRotation } from '../cards';
+import { faceAt, effectivePT, zRotation } from '../cards';
+import { CardView } from './CardView';
 
 /** Big readable card preview (README: hover → expanded card). Corner-pinned
  * with a small delay so it never chases or blocks the pointer. */
@@ -24,17 +25,14 @@ export function HoverPreview() {
     };
   }, [hover, dragging]);
 
-  const customDisplay = useCustomDisplay(shown?.pool);
   if (!shown || !enabled) return null;
   const face = shown.pool.sf ? faceAt(shown.pool, shown.rotIndex) : null;
-  const img = shown.pool.custom ? customDisplay?.frontFaceImageUrl : face?.img;
-  if (!img) return null;
   const sideways = Math.abs(zRotation(shown.pool, shown.rotIndex)) % 180 === 90;
   const pt = effectivePT(face, shown.counters ?? {});
   const hasCounterDelta = shown.counters && ((shown.counters['+1/+1'] ?? 0) || (shown.counters['-1/-1'] ?? 0));
   return (
     <div className={`hover-preview${sideways ? ' sideways' : ''}`}>
-      <img src={img.replace('/normal/', '/large/')} alt={face?.name ?? 'card'} />
+      <CardView pool={shown.pool} rotIndex={shown.rotIndex} large />
       {pt && hasCounterDelta ? <div className="oracle">Effective P/T: {pt.p}/{pt.t}</div> : null}
     </div>
   );
