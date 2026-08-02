@@ -244,14 +244,14 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
 
   const revealedHandMenu = (guid: string) => (e: React.MouseEvent) => {
     e.preventDefault();
-    const world = screenToWorld(liveView.current, window.innerWidth / 2, window.innerHeight / 2);
     useUI.getState().openCtxMenu({
       x: e.clientX,
       y: e.clientY,
       items: [
         {
           label: `Play for ${player.name}`,
-          action: () => actions.moveCard(guid, { zone: 'battlefield', x: world.x, y: world.y + 200 }),
+          // Slots into the OWNER's rows — lands by their edge, spells centered.
+          action: () => actions.moveCard(guid, { zone: 'battlefield', ...actions.autoPlayPosition(guid) }),
         },
         { sep: true, label: '' },
         { label: 'Discard', action: () => actions.moveCard(guid, { zone: 'graveyard' }) },

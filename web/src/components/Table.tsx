@@ -148,6 +148,14 @@ export function Table() {
           <span className={`status ${connStatus}`}>
             {connStatus === 'connected' ? '● live' : connStatus === 'reconnecting' ? '◌ reconnecting…' : connStatus}
           </span>
+          {(room?.turn ?? 0) > 0 && (
+            <span
+              className="turn-count"
+              title={`Turn ${room!.turn} — ${players.find((p) => p.playerId === room?.turnPlayerId)?.name ?? 'unclaimed'}`}
+            >
+              Turn {room!.turn}
+            </span>
+          )}
           {spectator && <span className="status" style={{ color: 'var(--warn)' }}>spectating</span>}
         </div>
         {!spectator && (

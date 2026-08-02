@@ -8,7 +8,6 @@ import { deckColorIdentity, manaSymbolUrl } from '../cards';
 import { resolveDeckByNames, resolveByIds, searchTokens, toPoolCard, type ScryfallCard } from '../scryfall';
 import { fetchArchidektDeck, parseArchidektUrl } from '../archidekt';
 import { persisted } from '../session';
-import { homePosition, TABLE } from '../view';
 import { CardView } from './CardView';
 
 function Backdrop({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
@@ -127,10 +126,8 @@ function SearchModal({ ownerId, onClose }: { ownerId?: string; onClose: () => vo
   const take = (guid: string, where: 'hand' | 'battlefield' | 'graveyard' | 'command') => {
     setTouched(true);
     if (where === 'battlefield') {
-      // Land it on the OWNER's side of the table — they still control it.
-      const seat =
-        players.find((p) => p.playerId === (ownerId ?? session?.playerId))?.seat ?? session?.seat ?? 0;
-      actions.moveCard(guid, { zone: 'battlefield', ...homePosition(seat, Math.floor(Math.random() * 7)) });
+      // Slots into the OWNER's rows — lands by their edge, spells centered.
+      actions.moveCard(guid, { zone: 'battlefield', ...actions.autoPlayPosition(guid) });
     } else {
       actions.moveCard(guid, { zone: where });
     }
@@ -194,7 +191,6 @@ function ZoneModal({
   const pool = useGame((s) => s.pool);
   const cards = useGame((s) => s.cards);
   const players = useGame((s) => s.players);
-  const session = useGame((s) => s.session);
   const ownerName = players.find((p) => p.playerId === zoneOwnerId)?.name ?? '?';
 
   const list = useMemo(
@@ -227,10 +223,7 @@ function ZoneModal({
               <div className="gactions">
                 <button
                   className="small"
-                  onClick={() => {
-                    const seat = session?.seat ?? 0;
-                    actions.moveCard(c.guid, { zone: 'battlefield', ...homePosition(seat, Math.floor(Math.random() * 7)) });
-                  }}
+                  onClick={() => actions.moveCard(c.guid, { zone: 'battlefield', ...actions.autoPlayPosition(c.guid) })}
                 >
                   battlefield
                 </button>

@@ -49,6 +49,27 @@ export function homePosition(seat: number, slot = 0): { x: number; y: number } {
   }
 }
 
+/** Columns per auto-placement row (they span the seat's home edge). */
+export const HOME_COLS = 7;
+
+/**
+ * Auto-placement slot grid for "Play" without an explicit drop point:
+ * row 0 (lands) hugs the seat's edge, row 1 (everything else) sits toward
+ * the middle of the table. Columns run across the home edge.
+ */
+export function homeSlot(seat: number, row: 0 | 1, col: number): { x: number; y: number } {
+  const c = TABLE / 2;
+  // 0.34 keeps the land row clear of the seat's own tray at fit-to-screen zoom.
+  const depth = TABLE * (row === 0 ? 0.34 : 0.19);
+  const lateral = (col - (HOME_COLS - 1) / 2) * (CARD_W * 1.15);
+  switch (seat) {
+    case 0: return { x: c + lateral, y: c + depth };
+    case 1: return { x: c - lateral, y: c - depth };
+    case 2: return { x: c + depth, y: c + lateral };
+    default: return { x: c - depth, y: c - lateral };
+  }
+}
+
 export interface ViewTransform {
   k: number;
   theta: number; // degrees

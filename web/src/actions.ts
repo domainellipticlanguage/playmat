@@ -8,6 +8,7 @@ import {
   type LogEntry,
   type PlayerState,
   type PoolCard,
+  type RoomState,
   type StateEvent,
   type ZoneName,
   HIDDEN_ZONES,
@@ -16,6 +17,7 @@ import {
 } from '@playmat/shared';
 import { sendState, flushHidden } from './connection';
 import { nextSeq, useGame } from './store';
+import { CARD_H, CARD_W, HOME_COLS, homeSlot } from './view';
 
 // ---------------------------------------------------------------------------
 // Event construction helpers
@@ -48,7 +50,7 @@ function logEvent(entry: Omit<LogEntry, 'ts'>): StateEvent {
   return { t: 'log', g: gameId, by: me, seq: Date.now() % 1_000_000_000, entry: { ...entry, ts: Date.now() } };
 }
 
-function roomEvent(room: { gameId: string; turnPlayerId: string | null }): StateEvent {
+function roomEvent(room: RoomState): StateEvent {
   const { me } = ctx();
   return { t: 'room', g: room.gameId, by: me, seq: nextSeq('room'), room };
 }
@@ -225,6 +227,38 @@ export function ownerOf(guid: string): string {
 export function canPlaceIn(guid: string, zone: ZoneName, zoneOwnerId?: string): boolean {
   if (zone === 'battlefield' || !zoneOwnerId) return true;
   return ownerOf(guid) === zoneOwnerId;
+}
+
+/** True when the card's front face is a land. */
+function isLand(pool: PoolCard | undefined): boolean {
+  return /\bLand\b/.test(pool?.sf?.faces[0]?.type ?? '');
+}
+
+/**
+ * Archidekt-style placement for "Play" without an explicit drop point: lands
+ * slot into the row hugging their owner's edge, everything else into the row
+ * toward the middle. A slot counts as occupied when any battlefield card sits
+ * near it, so manually dragging a card away frees its slot — no synced state.
+ */
+export function autoPlayPosition(guid: string): { x: number; y: number } {
+  const { s } = ctx();
+  const owner = ownerOf(guid);
+  const seat = s.players.find((p) => p.playerId === owner)?.seat ?? s.session?.seat ?? 0;
+  const row = isLand(s.pool[guid]) ? 0 : 1;
+  const taken = (x: number, y: number) =>
+    Object.values(s.cards).some(
+      (c) =>
+        c.zone === 'battlefield' &&
+        Math.abs(c.x - x) < CARD_W * 0.55 &&
+        Math.abs(c.y - y) < CARD_H * 0.55
+    );
+  for (let col = 0; col < HOME_COLS; col++) {
+    const p = homeSlot(seat, row, col);
+    if (!taken(p.x, p.y)) return p;
+  }
+  // Row full: pile onto the last slot with a visible offset.
+  const last = homeSlot(seat, row, HOME_COLS - 1);
+  return { x: last.x + 40, y: last.y + 30 };
 }
 
 /**
@@ -495,25 +529,35 @@ export function flipCoin(): void {
 export function passTurn(toPlayerId: string): void {
   const { s } = ctx();
   const name = s.players.find((p) => p.playerId === toPlayerId)?.name ?? '?';
+  const turn = (s.room?.turn ?? 0) + 1;
   sendState([
-    roomEvent({ gameId: s.room?.gameId ?? '', turnPlayerId: toPlayerId }),
-    logEvent({ kind: 'turn', text: `Turn passed to ${name}` }),
+    roomEvent({ gameId: s.room?.gameId ?? '', turnPlayerId: toPlayerId, turn }),
+    logEvent({ kind: 'turn', text: `Turn ${turn} — passed to ${name}` }),
   ]);
 }
 
-/** G-5 shortcut: untap all + draw, announced as one turn. */
+/**
+ * G-5 shortcut: untap all + draw, announced as one turn. Also claims the turn
+ * marker; the count bumps only when the marker actually changes hands, so
+ * "pass to me" followed by "take turn" counts once, not twice.
+ */
 export function takeTurn(): void {
-  const { myName } = ctx();
+  const { s, me, myName } = ctx();
   untapAll();
   drawCards(1);
-  sendState([logEvent({ kind: 'turn', text: `${myName} took their turn (untap, upkeep, draw)` })]);
+  const alreadyMine = s.room?.turnPlayerId === me;
+  const turn = (s.room?.turn ?? 0) + (alreadyMine ? 0 : 1);
+  sendState([
+    roomEvent({ gameId: s.room?.gameId ?? '', turnPlayerId: me, turn }),
+    logEvent({ kind: 'turn', text: `${myName} took turn ${turn} (untap, upkeep, draw)` }),
+  ]);
 }
 
 /** G-7: new game. Broadcasts a fresh gameId; every seated client re-sets-up. */
 export function resetGame(): void {
   const { s, myName } = ctx();
   sendState([
-    roomEvent({ gameId: newGuid(), turnPlayerId: null }),
+    roomEvent({ gameId: newGuid(), turnPlayerId: null, turn: 0 }),
     logEvent({ kind: 'reset', text: `${myName} started a new game — shuffle up!` }),
   ]);
 }
@@ -552,7 +596,7 @@ export function importDeck(cards: PoolCard[]): void {
     });
   }
   if (bumpGame) {
-    events.push({ t: 'room', g: gameId, by: me, seq: nextSeq('room'), room: { gameId, turnPlayerId: null } });
+    events.push({ t: 'room', g: gameId, by: me, seq: nextSeq('room'), room: { gameId, turnPlayerId: null, turn: 0 } });
   }
   events.push({
     t: 'log', g: gameId, by: me, seq: Date.now() % 1_000_000_000,

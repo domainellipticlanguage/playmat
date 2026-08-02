@@ -107,6 +107,12 @@ export interface RoomState {
   /** Game epoch. "New game" mints a new id; items from old epochs are ignored. */
   gameId: string;
   turnPlayerId: string | null;
+  /**
+   * Decorative turn counter. Bumps whenever the turn marker changes hands
+   * (pass, or take-turn by a player who didn't already hold it).
+   * Optional so snapshots written before this field still load.
+   */
+  turn?: number;
 }
 
 /** One face of a resolved card (Scryfall-derived). */

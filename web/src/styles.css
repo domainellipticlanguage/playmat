@@ -118,6 +118,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 }
 .topbar .code:hover { border-color: var(--accent); }
 .topbar .status { font-size: 12px; color: var(--ink-dim); white-space: nowrap; }
+.topbar .turn-count { font-size: 12px; color: var(--accent); white-space: nowrap; }
 .topbar .status.connected { color: var(--ok); }
 .topbar .status.reconnecting { color: var(--warn); }
 .topbar .spacer { flex: 1; }
@@ -249,8 +250,19 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 }
 .hud.pos-bottom { left: 10px; bottom: 10px; }
 .hud.pos-top { left: 50%; top: 10px; transform: translateX(-50%); flex-direction: row; align-items: flex-start; }
-.hud.pos-left { left: 10px; top: 50%; transform: translateY(-50%); }
-.hud.pos-right { right: 10px; top: 50%; transform: translateY(-50%); }
+/* East/west seats get a tall, narrow tray: piles stack vertically so the
+   tray hugs its edge instead of eating a wide slab of battlefield. */
+.hud.pos-left, .hud.pos-right {
+  top: 50%;
+  transform: translateY(-50%);
+  flex-direction: column;
+  align-items: stretch;
+}
+.hud.pos-left { left: 10px; }
+.hud.pos-right { right: 10px; }
+.hud.pos-left .piles, .hud.pos-right .piles { flex-direction: column; align-self: center; }
+.hud.pos-left .who, .hud.pos-right .who { min-width: 0; }
+.hud.pos-left .revealed-strip, .hud.pos-right .revealed-strip { flex-wrap: wrap; max-width: 130px; }
 .hud.turn { border-color: var(--accent); box-shadow: 0 0 18px var(--accent-soft), var(--shadow); }
 
 .hud .who { display: flex; flex-direction: column; gap: 4px; min-width: 118px; }

@@ -286,6 +286,44 @@ describe('hidden-zone bookkeeping', () => {
 describe('game state', () => {
   beforeEach(() => actions.importDeck(mkPool(10)));
 
+  it('take turn claims the marker; the count bumps only when it changes hands', () => {
+    actions.takeTurn();
+    let s = useGame.getState();
+    expect(s.room?.turnPlayerId).toBe(ME);
+    expect(s.room?.turn).toBe(1);
+    // A second consecutive take (e.g. after being passed the marker) is the
+    // same turn — no double count.
+    actions.takeTurn();
+    expect(useGame.getState().room?.turn).toBe(1);
+    actions.passTurn(FOE);
+    s = useGame.getState();
+    expect(s.room?.turnPlayerId).toBe(FOE);
+    expect(s.room?.turn).toBe(2);
+  });
+
+  it('lands slot into the edge row, spells into the center row, taken slots skip', () => {
+    const land: PoolCard = {
+      guid: 'land1', ownerId: ME,
+      sf: { id: 'l', name: 'Swamp', layout: 'normal', faces: [{ name: 'Swamp', img: '', type: 'Basic Land — Swamp' }] },
+    };
+    const land2: PoolCard = { ...land, guid: 'land2' };
+    const spell: PoolCard = {
+      guid: 'spell1', ownerId: ME,
+      sf: { id: 's', name: 'Bear', layout: 'normal', faces: [{ name: 'Bear', img: '', type: 'Creature — Bear' }] },
+    };
+    useGame.setState((s) => ({ pool: { ...s.pool, land1: land, land2, spell1: spell } }));
+    const p1 = actions.autoPlayPosition('land1');
+    actions.moveCard('land1', { zone: 'battlefield', ...p1 });
+    const p2 = actions.autoPlayPosition('land2');
+    const ps = actions.autoPlayPosition('spell1');
+    // Same row, different slot for the second land; different row for the spell.
+    expect(p2).not.toEqual(p1);
+    expect(ps.x === p1.x && ps.y === p1.y).toBe(false);
+    const seatDepth = (p: { x: number; y: number }) => Math.hypot(p.x - 1200, p.y - 1200);
+    // Lands sit farther from the table center (closer to the owner's edge).
+    expect(seatDepth(p1)).toBeGreaterThan(seatDepth(ps));
+  });
+
   it('commander damage ticks life in the same event', () => {
     const cmdrGuid = 'enemy-cmdr';
     useGame.setState((s) => ({

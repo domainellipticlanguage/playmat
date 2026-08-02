@@ -65,7 +65,7 @@ export function Lobby() {
           const joinable = normalizeRoomCode(code).length >= 4;
           const codeInput = (
             <input
-              placeholder="Room code or invite link"
+              placeholder="Code or link"
               value={code}
               maxLength={80}
               style={{ width: invited ? 110 : 170, textTransform: 'uppercase', letterSpacing: 2 }}

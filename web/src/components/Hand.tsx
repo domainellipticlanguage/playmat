@@ -92,12 +92,12 @@ export function Hand() {
       y: e.clientY,
       items: [
         { label: 'Play', action: () => {
-            const world = screenToWorld(liveView.current, window.innerWidth / 2, window.innerHeight / 2);
-            actions.playFromHand(guid, world.x, world.y + 200, false);
+            const p = actions.autoPlayPosition(guid);
+            actions.playFromHand(guid, p.x, p.y, false);
           } },
         { label: 'Play face down', action: () => {
-            const world = screenToWorld(liveView.current, window.innerWidth / 2, window.innerHeight / 2);
-            actions.playFromHand(guid, world.x, world.y + 200, true);
+            const p = actions.autoPlayPosition(guid);
+            actions.playFromHand(guid, p.x, p.y, true);
           } },
         { label: c?.revealed ? 'Stop revealing' : 'Reveal to table', action: () => actions.revealFromHand(guid, !c?.revealed) },
         { sep: true, label: '' },
