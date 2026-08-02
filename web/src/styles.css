@@ -1,14 +1,17 @@
+/* Neutral charcoal + gold (à la thismagiccarddoesnotexist.com): cool
+   near-black chrome so the warm wooden table is the only warm thing on
+   screen, and a richer gold for accents. */
 :root {
-  --bg: #14100c;
-  --panel: rgba(24, 19, 14, 0.92);
-  --panel-border: #3a2f22;
-  --ink: #e8ddc8;
-  --ink-dim: #9a8c72;
-  --accent: #c9a34a;
-  --accent-soft: rgba(201, 163, 74, 0.35);
-  --danger: #b0483c;
-  --ok: #5d8a4e;
-  --warn: #b58836;
+  --bg: #0a0a0a;
+  --panel: rgba(23, 23, 23, 0.94);
+  --panel-border: #333;
+  --ink: #ececec;
+  --ink-dim: #8f8f8f;
+  --accent: #d4a843;
+  --accent-soft: rgba(212, 168, 67, 0.35);
+  --danger: #c4453d;
+  --ok: #62a052;
+  --warn: #cf8b2e;
   --radius: 10px;
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
   font-size: 15px;
@@ -28,7 +31,7 @@ html, body, #root {
 button {
   font: inherit;
   color: var(--ink);
-  background: #2a2118;
+  background: #232323;
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   padding: 5px 12px;
@@ -36,14 +39,14 @@ button {
 }
 button:hover { border-color: var(--accent); }
 button:disabled { opacity: 0.45; cursor: default; }
-button.primary { background: #4a3a1c; border-color: var(--accent); }
+button.primary { background: #3a2f10; border-color: var(--accent); }
 button.danger { border-color: var(--danger); }
 button.small { padding: 2px 8px; font-size: 12px; }
 
 input, textarea, select {
   font: inherit;
   color: var(--ink);
-  background: #1d1710;
+  background: #161616;
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   padding: 6px 10px;
@@ -60,12 +63,12 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   justify-content: center;
   gap: 18px;
   background:
-    radial-gradient(ellipse at 50% -20%, rgba(201, 163, 74, 0.15), transparent 60%),
+    radial-gradient(ellipse at 50% -20%, rgba(212, 168, 67, 0.15), transparent 60%),
     var(--bg);
 }
 .lobby h1 {
   margin: 0;
-  filter: drop-shadow(0 2px 14px rgba(201, 163, 74, 0.3));
+  filter: drop-shadow(0 2px 14px rgba(212, 168, 67, 0.3));
 }
 .lobby .tagline { color: var(--ink-dim); margin-top: -12px; }
 .lobby .card {
@@ -111,7 +114,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   padding: 1px 9px;
   border: 1px solid var(--panel-border);
   border-radius: 6px;
-  background: #1d1710;
+  background: #161616;
 }
 .topbar .code:hover { border-color: var(--accent); }
 .topbar .status { font-size: 12px; color: var(--ink-dim); white-space: nowrap; }
@@ -136,7 +139,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   overflow: hidden;
   background:
     radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%),
-    var(--table-bg, #221a12);
+    var(--table-bg, #191919);
   touch-action: none;
   user-select: none;
 }
@@ -144,7 +147,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .table-surface {
   position: absolute;
   border-radius: 40px;
-  box-shadow: inset 0 0 120px rgba(0,0,0,0.7), 0 0 0 14px #1a130c, 0 0 60px rgba(0,0,0,0.8);
+  box-shadow: inset 0 0 120px rgba(0,0,0,0.7), 0 0 0 14px #141414, 0 0 60px rgba(0,0,0,0.8);
   background-size: cover;
   background-position: center;
   /* Procedural hewn-wood fallback: shows through until /table.jpg exists
@@ -189,7 +192,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   pointer-events: none;
 }
 .counter-badge {
-  background: rgba(20, 16, 10, 0.88);
+  background: rgba(12, 12, 12, 0.88);
   border: 1px solid var(--accent-soft);
   color: var(--ink);
   border-radius: 10px;
@@ -201,7 +204,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   position: absolute;
   right: 3px;
   bottom: 3px;
-  background: rgba(20, 16, 10, 0.92);
+  background: rgba(12, 12, 12, 0.92);
   border: 1px solid var(--accent-soft);
   border-radius: 6px;
   font-size: 12px;
@@ -214,7 +217,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .marquee {
   position: absolute;
   border: 1px dashed var(--accent);
-  background: rgba(201, 163, 74, 0.12);
+  background: rgba(212, 168, 67, 0.12);
   pointer-events: none;
   z-index: 50;
 }
@@ -223,7 +226,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .cursor-dot .dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 6px rgba(0,0,0,0.8); }
 .cursor-dot .label {
   font-size: 11px;
-  background: rgba(20,16,10,0.85);
+  background: rgba(12,12,12,0.85);
   padding: 1px 5px;
   border-radius: 4px;
   margin-top: 2px;
@@ -274,7 +277,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 /* Active-player chip — the green presence dot is connectivity, not turn. */
 .turn-badge {
   background: var(--accent);
-  color: #1a130c;
+  color: #0f0d06;
   border-radius: 8px;
   font-size: 10px;
   font-weight: bold;
@@ -296,7 +299,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 }
 .life .stack { display: flex; flex-direction: column; gap: 2px; }
 .pcounters { display: flex; gap: 4px; flex-wrap: wrap; font-size: 12px; }
-.pcounter { background: #241c12; border: 1px solid var(--panel-border); border-radius: 8px; padding: 1px 7px; cursor: pointer; }
+.pcounter { background: #1e1e1e; border: 1px solid var(--panel-border); border-radius: 8px; padding: 1px 7px; cursor: pointer; }
 .cmdr-dmg { font-size: 11px; display: flex; flex-direction: column; gap: 2px; }
 .cmdr-dmg .row { display: flex; align-items: center; gap: 4px; }
 
@@ -308,7 +311,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   border: 1px dashed var(--panel-border);
   position: relative;
   cursor: pointer;
-  background: #171209;
+  background: #131313;
   flex-shrink: 0;
 }
 .pile .mtg-card { display: block; width: 100%; height: 100%; }
@@ -320,13 +323,13 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   text-align: center;
   font-size: 10px;
   color: var(--ink-dim);
-  background: rgba(15, 12, 8, 0.85);
+  background: rgba(10, 10, 10, 0.85);
   border-radius: 0 0 6px 6px;
 }
 .pile .pile-count {
   position: absolute;
   top: 3px; right: 3px;
-  background: rgba(15, 12, 8, 0.92);
+  background: rgba(10, 10, 10, 0.92);
   border: 1px solid var(--accent-soft);
   border-radius: 9px;
   font-size: 12px;
@@ -458,7 +461,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   font-size: 14px;
 }
 .ctx-menu .item { padding: 5px 12px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
-.ctx-menu .item:hover { background: #33281a; }
+.ctx-menu .item:hover { background: #2b2b2b; }
 .ctx-menu .sep { height: 1px; background: var(--panel-border); margin: 4px 6px; }
 
 /* ---------------- Hover preview ---------------- */
@@ -513,7 +516,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .die {
   width: 92px; height: 92px;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(145deg, #3b2d1c, #241a0f);
+  background: linear-gradient(145deg, #38300f, #1d1909);
   border: 2px solid var(--accent);
   border-radius: 18px;
   font-size: 42px;

@@ -53,16 +53,18 @@ export const persisted = {
   patch(partial: Partial<Persisted>): void {
     save({ ...load(), ...partial });
   },
-  saveHidden(roomCode: string, hidden: HiddenState): void {
+  // Keyed by room AND player: joining the same room under a fresh identity
+  // must not inherit the previous identity's hand/library mirror.
+  saveHidden(roomCode: string, playerId: string, hidden: HiddenState): void {
     const p = load();
-    p.hidden = { ...(p.hidden ?? {}), [roomCode]: hidden };
+    p.hidden = { ...(p.hidden ?? {}), [`${roomCode}:${playerId}`]: hidden };
     // Cap stored rooms so localStorage doesn't grow forever.
     const entries = Object.entries(p.hidden);
     if (entries.length > 8) p.hidden = Object.fromEntries(entries.slice(-8));
     save(p);
   },
-  getHidden(roomCode: string): HiddenState | undefined {
-    return load().hidden?.[roomCode];
+  getHidden(roomCode: string, playerId: string): HiddenState | undefined {
+    return load().hidden?.[`${roomCode}:${playerId}`];
   },
   /** Save a resolved deck for one-click reuse. Same name updates in place. */
   saveDeck(name: string, cards: PoolCard[]): void {

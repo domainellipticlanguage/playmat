@@ -65,7 +65,7 @@ function persistHiddenNow(session: StoredSession): void {
     library: hidden.library,
     hand: hidden.hand,
   };
-  persisted.saveHidden(session.roomCode, payload);
+  persisted.saveHidden(session.roomCode, session.playerId, payload);
   void api(`/rooms/${session.roomCode}/hidden`, {
     method: 'PUT',
     body: JSON.stringify(payload),
@@ -114,7 +114,7 @@ export async function startSession(session: StoredSession): Promise<void> {
   persisted.patch({ lastSession: session, name: session.name });
 
   // Local copy of hidden zones is available before the network is.
-  const localHidden = persisted.getHidden(session.roomCode);
+  const localHidden = persisted.getHidden(session.roomCode, session.playerId);
   if (localHidden) {
     useGame.setState({
       hidden: { library: localHidden.library, hand: localHidden.hand },
