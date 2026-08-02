@@ -55,12 +55,13 @@ const MAT_DMZ = 300;
 const MAT_INSET = 14;
 
 /**
- * The mat for a seat, given which seats are occupied. Pinwheel layout:
- * every seat always owns the table corner on its front-LEFT (SW for seat 0,
- * NE for 1, SE for 2, NW for 3), and extends into its front-right corner
- * only when the neighboring seat on that side is empty. Mats therefore
- * never overlap for any occupancy, every player gets the same shape in a
- * full game, and 2-player face-to-face games get full-width mats.
+ * The mat for a seat, given which seats are occupied. Pinwheel layout,
+ * counter-clockwise: every seat always owns the table corner on its
+ * front-RIGHT (SE for seat 0, NW for 1, NE for 2, SW for 3), and extends
+ * into its front-left corner only when the neighboring seat on that side is
+ * empty. Mats therefore never overlap for any occupancy, every player gets
+ * the same shape in a full game, and 2-player face-to-face games get
+ * full-width mats.
  */
 export function matRect(seat: number, occupied: (s: number) => boolean): MatRect {
   const m = MAT_MARGIN;
@@ -69,10 +70,10 @@ export function matRect(seat: number, occupied: (s: number) => boolean): MatRect
   const T = TABLE;
   let r: MatRect;
   switch (seat) {
-    case 0: r = { x0: m, x1: occupied(2) ? c + d : T - m, y0: c + d, y1: T - m }; break;
-    case 1: r = { x0: occupied(3) ? c - d : m, x1: T - m, y0: m, y1: c - d }; break;
-    case 2: r = { x0: c + d, x1: T - m, y0: occupied(1) ? c - d : m, y1: T - m }; break;
-    default: r = { x0: m, x1: c - d, y0: m, y1: occupied(0) ? c + d : T - m }; break;
+    case 0: r = { x0: occupied(3) ? c - d : m, x1: T - m, y0: c + d, y1: T - m }; break;
+    case 1: r = { x0: m, x1: occupied(2) ? c + d : T - m, y0: m, y1: c - d }; break;
+    case 2: r = { x0: c + d, x1: T - m, y0: m, y1: occupied(0) ? c + d : T - m }; break;
+    default: r = { x0: m, x1: c - d, y0: occupied(1) ? c - d : m, y1: T - m }; break;
   }
   return { x0: r.x0 + MAT_INSET, y0: r.y0 + MAT_INSET, x1: r.x1 - MAT_INSET, y1: r.y1 - MAT_INSET };
 }

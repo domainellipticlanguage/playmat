@@ -661,7 +661,7 @@ export function importDeck(cards: PoolCard[]): void {
   }
   events.push({
     t: 'log', g: gameId, by: me, seq: nextLogSeq(),
-    entry: { kind: 'note', text: `${myName} imported a deck (${cards.length} cards)`, ts: Date.now() },
+    entry: { kind: 'note', text: `${myName} chose a deck (${cards.length} cards)`, ts: Date.now() },
   });
   sendState(events);
   runNewGameSetup(gameId);

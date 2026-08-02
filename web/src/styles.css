@@ -121,6 +121,12 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .topbar .turn-count { font-size: 12px; color: var(--accent); white-space: nowrap; }
 .topbar .status.connected { color: var(--ok); }
 .topbar .status.reconnecting { color: var(--warn); }
+.topbar .conn-icon { display: inline-flex; align-items: center; color: var(--ink-dim); }
+.topbar .conn-icon.connected { color: var(--ok); }
+.topbar .conn-icon.connecting,
+.topbar .conn-icon.reconnecting { color: var(--warn); animation: conn-pulse 1.2s ease-in-out infinite; }
+.topbar .conn-icon.dead { color: var(--danger); }
+@keyframes conn-pulse { 50% { opacity: 0.35; } }
 .topbar .spacer { flex: 1; }
 
 /* Two tiers of topbar actions: on wide windows Token/Dice/Game are their own
@@ -143,6 +149,9 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
     var(--table-bg, #191919);
   touch-action: none;
   user-select: none;
+  -webkit-user-select: none;
+  /* No iOS long-press image callout on card art mid-drag. */
+  -webkit-touch-callout: none;
 }
 .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
 .table-surface {
@@ -264,14 +273,6 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   padding: 0;
 }
 .swatch.picked { border-color: var(--ink); }
-
-.marquee {
-  position: absolute;
-  border: 1px dashed var(--accent);
-  background: rgba(212, 168, 67, 0.12);
-  pointer-events: none;
-  z-index: 50;
-}
 
 .cursor-dot { position: absolute; pointer-events: none; z-index: 60; transition: transform 150ms linear; }
 .cursor-dot .dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 6px rgba(0,0,0,0.8); }
@@ -436,6 +437,12 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   position: relative;
   cursor: grab;
   transform: translateY(34px);
+  /* Without this, mobile browsers claim the touch for scrolling and fire
+     pointercancel mid-drag — the card could never leave the hand. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .hand-card:hover { transform: translateY(-22px) scale(1.35); z-index: 5; margin: 0 24px; }
 .hand-card .mtg-card { display: block; width: 100%; }

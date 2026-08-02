@@ -353,6 +353,15 @@ describe('game state', () => {
     }
   });
 
+  it('pinwheels counter-clockwise: each seat owns its front-RIGHT corner', () => {
+    const seats = [0, 1, 2, 3];
+    // Full table: the corner on each seat's right hand is always theirs.
+    expect(matSeatAt(2290, 2290, seats)).toBe(0); // SE — seat 0 faces north, right = east
+    expect(matSeatAt(110, 110, seats)).toBe(1); // NW
+    expect(matSeatAt(2290, 110, seats)).toBe(2); // NE
+    expect(matSeatAt(110, 2290, seats)).toBe(3); // SW
+  });
+
   it('dropping a card on a mat claims control for that mat\'s player; the DMZ does not', () => {
     const guid = useGame.getState().hidden.library[0];
     const seats = [0, 1];

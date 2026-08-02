@@ -16,7 +16,6 @@ import {
   screenToWorld,
   seatAngle,
   viewRotation,
-  worldToScreen,
   type MatRect,
   type ViewTransform,
 } from '../view';
@@ -76,6 +75,7 @@ function Playmat({
 }
 
 interface DragState {
+  pointerId: number;
   guids: string[];
   /** world-space offset from pointer to each card's center */
   offsets: Record<string, { dx: number; dy: number }>;
@@ -83,6 +83,17 @@ interface DragState {
   moved: boolean;
   fromHandGuid?: string;
 }
+
+/**
+ * View gesture in progress. One pointer on the background pans (mouse drag
+ * or one finger); a second touch upgrades the pan to a pinch, which zooms
+ * by the finger-distance ratio AND pans by the midpoint's travel — so two
+ * fingers moving together is also a pan, Figma-style. Everything speaks
+ * Pointer Events, so mouse/touch/pen share one code path.
+ */
+type ViewGesture =
+  | { mode: 'pan'; pointerId: number; startX: number; startY: number; cx: number; cy: number }
+  | { mode: 'pinch'; ids: [number, number]; m0: { x: number; y: number }; d0: number; view0: ViewTransform };
 
 export function Battlefield() {
   const session = useGame((s) => s.session);
@@ -100,9 +111,10 @@ export function Battlefield() {
   /** Viewport box in page coords, so the drag layer can sit exactly on top. */
   const [vpBox, setVpBox] = useState({ left: 0, top: 0, width: 0, height: 0 });
   const [dragPositions, setDragPositions] = useState<Record<string, { x: number; y: number }>>({});
-  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const dragRef = useRef<DragState | null>(null);
-  const panRef = useRef<{ startX: number; startY: number; cx: number; cy: number } | null>(null);
+  const gestureRef = useRef<ViewGesture | null>(null);
+  /** Local coords of every pointer currently down on the viewport. */
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const lastCursorSent = useRef(0);
   const lastDragSent = useRef(0);
 
@@ -176,25 +188,36 @@ export function Battlefield() {
   const onPointerDown = (e: React.PointerEvent) => {
     if (useUI.getState().ctxMenu) return;
     // A card's crucible menu portals into <body>, but React still bubbles its
-    // pointerdown through this component tree. Left unhandled we fall to the
-    // marquee branch below and setPointerCapture on the viewport, which steals
-    // the pointerup — so the menu item never receives a click and every entry
-    // looks dead. The menu stops mousedown, not pointerdown, hence this guard.
+    // pointerdown through this component tree. Left unhandled we'd start a pan
+    // and setPointerCapture on the viewport, which steals the pointerup — so
+    // the menu item never receives a click and every entry looks dead. The
+    // menu stops mousedown, not pointerdown, hence this guard.
     if ((e.target as HTMLElement).closest('.mtg-card-menu, .ctx-menu')) return;
     const local = toLocal(e);
+    pointersRef.current.set(e.pointerId, local);
     const world = screenToWorld(view, local.x, local.y);
     const cardEl = (e.target as HTMLElement).closest('[data-guid]') as HTMLElement | null;
 
-    // Pan: right-drag on the background (cards keep their context menu),
-    // middle button, or alt+drag from anywhere.
-    if ((e.button === 2 && !cardEl) || e.button === 1 || (e.button === 0 && e.altKey)) {
-      panRef.current = { startX: local.x, startY: local.y, cx: view.cx, cy: view.cy };
+    // Extra fingers during a card drag change nothing.
+    if (dragRef.current) return;
+
+    // Second touch while panning: upgrade to a pinch, wherever it landed.
+    if (gestureRef.current?.mode === 'pan' && pointersRef.current.size === 2) {
+      const [a, b] = [...pointersRef.current.entries()];
+      gestureRef.current = {
+        mode: 'pinch',
+        ids: [a[0], b[0]],
+        m0: { x: (a[1].x + b[1].x) / 2, y: (a[1].y + b[1].y) / 2 },
+        d0: Math.max(1, Math.hypot(a[1].x - b[1].x, a[1].y - b[1].y)),
+        view0: view,
+      };
       viewportRef.current!.setPointerCapture(e.pointerId);
       e.preventDefault();
       return;
     }
-    if (e.button !== 0) return;
-    if (cardEl) {
+    if (gestureRef.current) return;
+
+    if (e.button === 0 && !e.altKey && cardEl) {
       const guid = cardEl.dataset.guid!;
       const st = useGame.getState();
       let guids: string[];
@@ -211,33 +234,56 @@ export function Battlefield() {
         const c = st.cards[g];
         if (c) offsets[g] = { dx: c.x - world.x, dy: c.y - world.y };
       }
-      dragRef.current = { guids, offsets, startScreen: local, moved: false };
+      dragRef.current = { pointerId: e.pointerId, guids, offsets, startScreen: local, moved: false };
       useUI.getState().setDragging(guid);
       viewportRef.current!.setPointerCapture(e.pointerId);
       e.preventDefault();
       return;
     }
 
-    // Empty space: marquee select.
-    dragRef.current = null;
-    setMarquee({ x0: local.x, y0: local.y, x1: local.x, y1: local.y });
-    useGame.getState().setSelection([]);
+    // Everything else drags the view: left/touch on the background, middle
+    // button, right-drag on the background (cards keep their context menu),
+    // or alt+drag from anywhere.
+    if (e.button > 2 || (e.button === 2 && cardEl)) return;
+    if (e.button === 0 && !e.altKey) useGame.getState().setSelection([]);
+    gestureRef.current = { mode: 'pan', pointerId: e.pointerId, startX: local.x, startY: local.y, cx: view.cx, cy: view.cy };
     viewportRef.current!.setPointerCapture(e.pointerId);
+    e.preventDefault();
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
     const local = toLocal(e);
+    if (pointersRef.current.has(e.pointerId)) pointersRef.current.set(e.pointerId, local);
     const world = screenToWorld(view, local.x, local.y);
     publishCursor(world);
 
-    if (panRef.current) {
-      const p = panRef.current;
-      setView((v) => clampView({ ...v, cx: p.cx + (local.x - p.startX), cy: p.cy + (local.y - p.startY) }));
+    const ges = gestureRef.current;
+    if (ges?.mode === 'pinch') {
+      const a = pointersRef.current.get(ges.ids[0]);
+      const b = pointersRef.current.get(ges.ids[1]);
+      if (!a || !b) return;
+      const m1 = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const d1 = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+      const k = Math.min(1.4, Math.max(0.08, ges.view0.k * (d1 / ges.d0)));
+      const scale = k / ges.view0.k;
+      setView(() =>
+        clampView({
+          ...ges.view0,
+          k,
+          cx: m1.x - (ges.m0.x - ges.view0.cx) * scale,
+          cy: m1.y - (ges.m0.y - ges.view0.cy) * scale,
+        })
+      );
+      return;
+    }
+    if (ges?.mode === 'pan') {
+      if (e.pointerId !== ges.pointerId) return;
+      setView((v) => clampView({ ...v, cx: ges.cx + (local.x - ges.startX), cy: ges.cy + (local.y - ges.startY) }));
       return;
     }
 
     const drag = dragRef.current;
-    if (drag) {
+    if (drag && e.pointerId === drag.pointerId) {
       const dist = Math.hypot(local.x - drag.startScreen.x, local.y - drag.startScreen.y);
       if (dist > 5) drag.moved = true;
       if (drag.moved) {
@@ -249,19 +295,30 @@ export function Battlefield() {
         setDragPositions(positions);
         publishDrag(drag.guids[0], positions[drag.guids[0]]);
       }
-      return;
     }
-
-    if (marquee) setMarquee({ ...marquee, x1: local.x, y1: local.y });
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
-    if (panRef.current) {
-      panRef.current = null;
+    pointersRef.current.delete(e.pointerId);
+
+    const ges = gestureRef.current;
+    if (ges?.mode === 'pinch') {
+      if (!ges.ids.includes(e.pointerId)) return;
+      // One finger left: back to a pan, re-baselined where that finger is now.
+      const otherId = ges.ids[0] === e.pointerId ? ges.ids[1] : ges.ids[0];
+      const survivor = pointersRef.current.get(otherId);
+      gestureRef.current = survivor
+        ? { mode: 'pan', pointerId: otherId, startX: survivor.x, startY: survivor.y, cx: view.cx, cy: view.cy }
+        : null;
+      return;
+    }
+    if (ges?.mode === 'pan') {
+      if (e.pointerId === ges.pointerId) gestureRef.current = null;
       return;
     }
 
     const drag = dragRef.current;
+    if (drag && e.pointerId !== drag.pointerId) return;
     dragRef.current = null;
     useUI.getState().setDragging(null);
 
@@ -307,23 +364,31 @@ export function Battlefield() {
       }
       if (session) sendEphemeral({ t: 'dragend', by: session.playerId, guid: drag.guids[0], ts: Date.now() });
       setDragPositions({});
+    }
+  };
+
+  /** Browser reclaimed a pointer (OS gesture, tab switch): abandon cleanly. */
+  const onPointerCancel = (e: React.PointerEvent) => {
+    pointersRef.current.delete(e.pointerId);
+    const ges = gestureRef.current;
+    if (ges?.mode === 'pinch' && ges.ids.includes(e.pointerId)) {
+      const otherId = ges.ids[0] === e.pointerId ? ges.ids[1] : ges.ids[0];
+      const survivor = pointersRef.current.get(otherId);
+      gestureRef.current = survivor
+        ? { mode: 'pan', pointerId: otherId, startX: survivor.x, startY: survivor.y, cx: view.cx, cy: view.cy }
+        : null;
       return;
     }
-
-    if (marquee) {
-      const { x0, y0, x1, y1 } = marquee;
-      const [lo_x, hi_x] = [Math.min(x0, x1), Math.max(x0, x1)];
-      const [lo_y, hi_y] = [Math.min(y0, y1), Math.max(y0, y1)];
-      if (hi_x - lo_x > 8 || hi_y - lo_y > 8) {
-        const hit = battlefieldCards
-          .filter((c) => {
-            const s = worldToScreen(view, c.x, c.y);
-            return s.x >= lo_x && s.x <= hi_x && s.y >= lo_y && s.y <= hi_y;
-          })
-          .map((c) => c.guid);
-        useGame.getState().setSelection(hit);
-      }
-      setMarquee(null);
+    if (ges?.mode === 'pan' && e.pointerId === ges.pointerId) {
+      gestureRef.current = null;
+      return;
+    }
+    const drag = dragRef.current;
+    if (drag && e.pointerId === drag.pointerId) {
+      dragRef.current = null;
+      useUI.getState().setDragging(null);
+      setDragPositions({});
+      if (session) sendEphemeral({ t: 'dragend', by: session.playerId, guid: drag.guids[0], ts: Date.now() });
     }
   };
 
@@ -384,6 +449,7 @@ export function Battlefield() {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
       onWheel={onWheel}
       onContextMenu={(e) => {
         if (!(e.target as HTMLElement).closest('[data-guid]')) e.preventDefault();
@@ -422,20 +488,9 @@ export function Battlefield() {
           </div>
         ))}
       </div>
-      {marquee && (
-        <div
-          className="marquee"
-          style={{
-            left: Math.min(marquee.x0, marquee.x1),
-            top: Math.min(marquee.y0, marquee.y1),
-            width: Math.abs(marquee.x1 - marquee.x0),
-            height: Math.abs(marquee.y1 - marquee.y0),
-          }}
-        />
-      )}
       <div className="help-hint">
-        click: tap · drag: move · shift-click: multi-select · drag empty: box select ·
-        right-drag: pan · scroll or pinch: zoom
+        click: tap · drag card: move · drag table: pan · scroll or pinch: zoom ·
+        shift-click: multi-select
       </div>
       {lifted.length > 0 &&
         createPortal(

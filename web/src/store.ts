@@ -63,6 +63,9 @@ export interface RemoteDrag {
 interface GameStore {
   session: StoredSession | null;
   connStatus: TransportStatus;
+  /** True once the first room snapshot has been applied this session — before
+   * that, pool/cards are empty even for a returning player. */
+  synced: boolean;
   players: SeatRecord[];
   playerStates: Record<string, PlayerState>;
   room: RoomState | null;
@@ -123,6 +126,7 @@ export function cardName(pool: Record<string, PoolCard>, guid: string, faceDown:
 export const useGame = create<GameStore>((set, get) => ({
   session: null,
   connStatus: 'idle',
+  synced: false,
   players: [],
   playerStates: {},
   room: null,
@@ -352,6 +356,7 @@ export const useGame = create<GameStore>((set, get) => ({
       log: snap.logs.slice(-500),
       hidden,
       hiddenSeq,
+      synced: true,
     });
   },
 

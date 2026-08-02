@@ -93,6 +93,7 @@ export async function startSession(session: StoredSession): Promise<void> {
   stopSession();
   // Fresh room, fresh state — nothing may bleed over from a previous session.
   useGame.setState({
+    synced: false,
     players: [],
     playerStates: {},
     room: null,

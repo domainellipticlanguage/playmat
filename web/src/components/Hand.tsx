@@ -60,6 +60,13 @@ export function Hand() {
     if (d.moved) setGhost({ guid: d.guid, x: e.clientX, y: e.clientY });
   };
 
+  /** Browser reclaimed the pointer (e.g. an OS gesture): abandon the drag. */
+  const onPointerCancel = () => {
+    dragRef.current = null;
+    setGhost(null);
+    useUI.getState().setDragging(null);
+  };
+
   const onPointerUp = (e: React.PointerEvent) => {
     const d = dragRef.current;
     dragRef.current = null;
@@ -127,6 +134,7 @@ export function Hand() {
               onPointerDown={onPointerDown(guid)}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
+              onPointerCancel={onPointerCancel}
               onContextMenu={menuFor(guid)}
               onMouseEnter={() => p && useUI.getState().setHover({ pool: p, rotIndex: 0 })}
               onMouseLeave={() => useUI.getState().setHover(null)}

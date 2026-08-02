@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useGame } from '../store';
 import { useUI } from '../uiStore';
 import * as actions from '../actions';
@@ -11,6 +11,28 @@ import { ModalHost } from './Modals';
 import { ContextMenuHost } from './ContextMenu';
 import { DiceOverlay, HoverPreview, LogPanel } from './Panels';
 import { TABLE, liveView, screenToWorld } from '../view';
+import type { TransportStatus } from '../transport';
+
+/** Wifi / wifi-off glyph for the topbar — clearer than a colored dot. */
+function ConnIcon({ status }: { status: TransportStatus }) {
+  const label =
+    status === 'connected' ? 'Connected' :
+    status === 'reconnecting' ? 'Reconnecting…' :
+    status === 'connecting' ? 'Connecting…' :
+    'Disconnected';
+  const off = status === 'dead' || status === 'idle';
+  return (
+    <span className={`conn-icon ${status}`} title={label} aria-label={label} role="img">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <path d="M2.5 9.5a14 14 0 0 1 19 0" />
+        <path d="M5.5 13a9.5 9.5 0 0 1 13 0" />
+        <path d="M8.7 16.4a5 5 0 0 1 6.6 0" />
+        <circle cx="12" cy="19.6" r="1.4" fill="currentColor" stroke="none" />
+        {off && <line x1="3" y1="2.5" x2="21" y2="20.5" />}
+      </svg>
+    </span>
+  );
+}
 
 function centerDropSpot() {
   const w = screenToWorld(liveView.current, window.innerWidth / 2, window.innerHeight / 2);
@@ -21,6 +43,7 @@ export function Table() {
   const session = useGame((s) => s.session);
   const players = useGame((s) => s.players);
   const connStatus = useGame((s) => s.connStatus);
+  const synced = useGame((s) => s.synced);
   const room = useGame((s) => s.room);
   const pool = useGame((s) => s.pool);
   const [showLog, setShowLog] = useState(false);
@@ -49,6 +72,18 @@ export function Table() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [spectator]);
+
+  // Fresh arrival with no deck: open the deck picker for them. Gated on the
+  // snapshot so a returning player (whose pool just hasn't loaded yet) isn't
+  // flashed a picker they don't need; the ref makes it once per visit, so
+  // closing it without choosing isn't nagged.
+  const autoOpenedPicker = useRef(false);
+  useEffect(() => {
+    if (!synced || spectator || iHaveDeck || autoOpenedPicker.current) return;
+    if (useUI.getState().modal.kind !== 'none') return;
+    autoOpenedPicker.current = true;
+    useUI.getState().openModal({ kind: 'import' });
+  }, [synced, spectator, iHaveDeck]);
 
   if (!session) return null;
 
@@ -103,7 +138,7 @@ export function Table() {
   const gameItems = [
     { label: 'Mulligan — hand back, draw 7', action: () => actions.mulligan() },
     sep,
-    { label: iHaveDeck ? 'Re-import deck…' : 'Import deck…', action: () => ui.openModal({ kind: 'import' }) },
+    { label: iHaveDeck ? 'Change deck…' : 'Choose deck…', action: () => ui.openModal({ kind: 'import' }) },
     sep,
     {
       label: 'New game…',
@@ -131,9 +166,7 @@ export function Table() {
           <span className="code" title="Click to copy invite link" onClick={copyInvite}>
             {session.roomCode} {copied && <span style={{ fontSize: 11 }}>copied!</span>}
           </span>
-          <span className={`status ${connStatus}`}>
-            {connStatus === 'connected' ? '● live' : connStatus === 'reconnecting' ? '◌ reconnecting…' : connStatus}
-          </span>
+          <ConnIcon status={connStatus} />
           {(room?.turn ?? 0) > 0 && (
             <span
               className="turn-count"
@@ -148,7 +181,7 @@ export function Table() {
           <>
             {!iHaveDeck && (
               <button className="small primary" onClick={() => ui.openModal({ kind: 'import' })}>
-                Import deck
+                Choose deck
               </button>
             )}
             <button className="small" disabled={!iHaveDeck} onClick={() => actions.drawCards(1)} title="Draw (D)">

@@ -568,7 +568,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Backdrop onClose={onClose}>
-      <h3>Import a deck</h3>
+      <h3>Choose a deck</h3>
       {savedDecks.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span className="subtle">Your decks (saved on this device — no re-resolving needed):</span>
@@ -593,7 +593,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
                   />
                 )}
                 <button className="primary small" onClick={() => importSaved(d.id)}>
-                  Import
+                  Choose
                 </button>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <b>{d.name}</b>
@@ -674,7 +674,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
             <button onClick={onClose}>Cancel</button>
             <button className="primary" onClick={doImport}>
-              Import {pending.length} cards & shuffle up
+              Choose this deck ({pending.length} cards) & shuffle up
             </button>
           </div>
         </>
