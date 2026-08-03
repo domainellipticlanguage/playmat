@@ -205,6 +205,7 @@ export function Hand() {
           return (
             <div
               key={guid}
+              data-guid={guid}
               className={`hand-card${revealed ? ' revealed' : ''}${isLifted ? ' lifted' : ''}`}
               style={isLifted ? undefined : gapFor(myVi)}
               onPointerDown={onPointerDown(guid)}

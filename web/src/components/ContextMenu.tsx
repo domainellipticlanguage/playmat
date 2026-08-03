@@ -28,6 +28,26 @@ export function ContextMenuHost() {
       {menu.items.map((item, i) =>
         item.sep ? (
           <div key={i} className="sep" />
+        ) : item.children ? (
+          // Flyout submenu, opened by CSS :hover on the parent row.
+          <div key={i} className="item has-sub">
+            {item.label}
+            <span className="sub-arrow">▸</span>
+            <div className="ctx-menu sub">
+              {item.children.map((c, j) => (
+                <div
+                  key={j}
+                  className="item"
+                  onClick={() => {
+                    close();
+                    c.action?.();
+                  }}
+                >
+                  {c.label}
+                </div>
+              ))}
+            </div>
+          </div>
         ) : (
           <div
             key={i}

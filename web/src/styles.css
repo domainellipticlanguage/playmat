@@ -564,6 +564,12 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .ctx-menu .item { padding: 5px 12px; border-radius: 5px; cursor: pointer; white-space: nowrap; }
 .ctx-menu .item:hover { background: #2b2b2b; }
 .ctx-menu .sep { height: 1px; background: var(--panel-border); margin: 4px 6px; }
+.ctx-menu .item.has-sub { position: relative; display: flex; justify-content: space-between; align-items: center; gap: 14px; }
+.ctx-menu .sub-arrow { color: var(--ink-dim); font-size: 11px; }
+/* Flyout: hidden until its parent row is hovered; overlaps 6px so the
+   pointer can cross the seam without the submenu closing. */
+.ctx-menu .sub { display: none; position: absolute; left: calc(100% - 6px); top: -5px; }
+.ctx-menu .item.has-sub:hover > .sub { display: block; }
 
 /* ---------------- Hover preview ---------------- */
 

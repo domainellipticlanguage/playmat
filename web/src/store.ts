@@ -238,6 +238,25 @@ export const useGame = create<GameStore>((set, get) => ({
             patch.hiddenSeq = state.hiddenSeq + 1;
           }
         }
+
+        // A library card gone public (mill, search-take, tuck elsewhere):
+        // prune it from the owner's PUBLISHED library copy immediately, so
+        // repeat actions (M-M-M on a peer's pile) hit fresh tops instead of
+        // re-milling a stale one while the owner's republish is in flight.
+        if (!ev.card.del && ev.card.zone !== 'library') {
+          for (const [pid, ps] of Object.entries(state.playerStates)) {
+            if (ps.library?.includes(ev.card.guid)) {
+              patch.playerStates = {
+                ...(patch.playerStates ?? state.playerStates),
+                [pid]: {
+                  ...ps,
+                  library: ps.library.filter((g) => g !== ev.card.guid),
+                  libraryCount: Math.max(0, ps.libraryCount - 1),
+                },
+              };
+            }
+          }
+        }
         break;
       }
       case 'player':

@@ -31,15 +31,35 @@ export function Table() {
   const spectator = session?.seat === null;
   const iHaveDeck = Object.values(pool).some((p) => p.ownerId === me && !p.isToken);
 
-  // Keyboard shortcuts.
+  // Keyboard shortcuts. Where it makes sense they're HOVER-TARGETED: the key
+  // acts on what's under the cursor (M mills the library you're pointing at,
+  // P plays the hand card you're pointing at), falling back to your own stuff.
   useEffect(() => {
+    const mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    const onMove = (e: PointerEvent) => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    };
+    const under = (selector: string) =>
+      (document.elementFromPoint(mouse.x, mouse.y)?.closest(selector) ?? null) as HTMLElement | null;
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (useUI.getState().modal.kind !== 'none') return;
       if (spectator) return;
       if (e.key === 'd' || e.key === 'D') actions.drawCards(1);
-      else if (e.key === 'm' || e.key === 'M') actions.millCards(1);
-      else if (e.key === 'u' || e.key === 'U') actions.untapAll();
+      else if (e.key === 'm' || e.key === 'M') {
+        // Hovering a peer's library mills THEM (mill decks: point and M-M-M).
+        const drop = under('[data-drop]')?.dataset.drop?.split(':') ?? [];
+        const myId = useGame.getState().session?.playerId;
+        if (drop[0] === 'library' && drop[1] && drop[1] !== myId) actions.millTheirCards(drop[1], 1);
+        else actions.millCards(1);
+      } else if (e.key === 'p' || e.key === 'P') {
+        const guid = under('[data-guid]')?.dataset.guid;
+        if (guid && useGame.getState().hidden.hand.includes(guid)) {
+          const at = actions.autoPlayPosition(guid);
+          actions.playFromHand(guid, at.x, at.y, e.shiftKey);
+        }
+      } else if (e.key === 'u' || e.key === 'U') actions.untapAll();
       else if (e.key === 't' || e.key === 'T') {
         const sel = useGame.getState().selection;
         if (sel.length) {
@@ -48,8 +68,12 @@ export function Table() {
         }
       } else if (e.key === 'Escape') useGame.getState().setSelection([]);
     };
+    window.addEventListener('pointermove', onMove);
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('keydown', onKey);
+    };
   }, [spectator]);
 
   // Light the pile under a live drag, matching the hand strip's confirmation.

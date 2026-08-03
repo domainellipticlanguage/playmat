@@ -420,6 +420,26 @@ export function millCards(n: number): void {
   }
 }
 
+/**
+ * Mill a PEER from their published library order (honor system, like life).
+ * The store prunes milled guids from that copy as the card events apply, so
+ * repeated mills see fresh tops without waiting for the owner's republish.
+ */
+export function millTheirCards(ownerId: string, n: number): void {
+  const { s, myName } = ctx();
+  const name = s.players.find((p) => p.playerId === ownerId)?.name ?? '?';
+  const take = (s.playerStates[ownerId]?.library ?? []).slice(0, n);
+  for (const guid of take) moveCard(guid, { zone: 'graveyard' });
+  if (take.length) {
+    sendState([
+      logEvent({
+        kind: 'zone',
+        text: `${myName} milled ${take.length} of ${name}'s card${take.length > 1 ? 's' : ''}`,
+      }),
+    ]);
+  }
+}
+
 /** Reorder my hand locally — order is private, so nothing is published. */
 export function reorderHand(guid: string, toIndex: number): void {
   const { s } = ctx();

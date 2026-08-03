@@ -24,10 +24,18 @@ export type ModalState =
   | { kind: 'revealed'; playerId: string }
   | { kind: 'openingHand' };
 
+export interface CtxMenuItem {
+  label: string;
+  action?: () => void;
+  sep?: boolean;
+  /** Flyout submenu (one level deep), Archidekt-style. */
+  children?: CtxMenuItem[];
+}
+
 export interface CtxMenuState {
   x: number;
   y: number;
-  items: { label: string; action?: () => void; sep?: boolean }[];
+  items: CtxMenuItem[];
 }
 
 interface UIStore {

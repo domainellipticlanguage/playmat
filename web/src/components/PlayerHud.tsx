@@ -225,20 +225,20 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
             action: () => ui.openModal({ kind: 'search', ownerId: pid }),
           },
           {
-            label: 'Mill 1',
-            action: () => {
-              const top = state.library?.[0];
-              if (top) actions.moveCard(top, { zone: 'graveyard' });
-            },
-          },
-          {
-            label: 'Mill X…',
-            action: () => {
-              const n = Number(prompt(`Mill how many of ${player.name}'s cards?`, '3'));
-              for (const guid of (state.library ?? []).slice(0, n > 0 ? n : 0)) {
-                actions.moveCard(guid, { zone: 'graveyard' });
-              }
-            },
+            label: 'Mill  (M on hover)',
+            children: [
+              ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({
+                label: `Mill ${n} card${n > 1 ? 's' : ''}`,
+                action: () => actions.millTheirCards(pid, n),
+              })),
+              {
+                label: 'Mill X cards…',
+                action: () => {
+                  const n = Number(prompt(`Mill how many of ${player.name}'s cards?`, '12'));
+                  if (n > 0) actions.millTheirCards(pid, n);
+                },
+              },
+            ],
           },
         ],
       });
@@ -258,11 +258,22 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
             if (n > 0) ui.openModal({ kind: 'peek', count: n, mode: 'scry' });
           } },
         { label: 'Search library', action: () => ui.openModal({ kind: 'search' }) },
-        { label: 'Mill 1  (M)', action: () => actions.millCards(1) },
-        { label: 'Mill X…', action: () => {
-            const n = Number(prompt('Mill how many cards?', '3'));
-            if (n > 0) actions.millCards(n);
-          } },
+        {
+          label: 'Mill  (M)',
+          children: [
+            ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => ({
+              label: `Mill ${n} card${n > 1 ? 's' : ''}`,
+              action: () => actions.millCards(n),
+            })),
+            {
+              label: 'Mill X cards…',
+              action: () => {
+                const n = Number(prompt('Mill how many cards?', '12'));
+                if (n > 0) actions.millCards(n);
+              },
+            },
+          ],
+        },
         { sep: true, label: '' },
         { label: state.topRevealed ? 'Stop playing with top revealed' : 'Play with top revealed',
           action: () => actions.setTopRevealed(!state.topRevealed) },
