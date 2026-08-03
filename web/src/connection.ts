@@ -13,6 +13,7 @@ import {
   stateChannel,
 } from '@playmat/shared';
 import { config } from './config';
+import { logWire } from './debug';
 import { EventsClient } from './transport';
 import { persisted, type StoredSession } from './session';
 import { useGame } from './store';
@@ -81,11 +82,13 @@ export function sendState(events: StateEvent[]): void {
   const store = useGame.getState();
   for (const ev of events) store.applyStateEvent(ev);
   const code = store.session?.roomCode;
+  logWire('send', 'state', events);
   if (client && code) client.publish(stateChannel(code), events, { queueOffline: true });
 }
 
 export function sendEphemeral(ev: EphemeralEvent): void {
   const code = useGame.getState().session?.roomCode;
+  logWire('send', 'ephemeral', [ev]);
   if (client && code) client.publish(ephemeralChannel(code), [ev]);
 }
 
@@ -132,12 +135,14 @@ export async function startSession(session: StoredSession): Promise<void> {
   // Subscribe FIRST, then snapshot: events landing in between are also in the
   // snapshot (persisted before broadcast) and the seq guard dedupes (R-5).
   await Promise.all([
-    client.subscribe(stateChannel(session.roomCode), (ev) =>
-      useGame.getState().applyStateEvent(ev as StateEvent)
-    ),
-    client.subscribe(ephemeralChannel(session.roomCode), (ev) =>
-      useGame.getState().applyEphemeral(ev as EphemeralEvent)
-    ),
+    client.subscribe(stateChannel(session.roomCode), (ev) => {
+      logWire('recv', 'state', [ev]);
+      useGame.getState().applyStateEvent(ev as StateEvent);
+    }),
+    client.subscribe(ephemeralChannel(session.roomCode), (ev) => {
+      logWire('recv', 'ephemeral', [ev]);
+      useGame.getState().applyEphemeral(ev as EphemeralEvent);
+    }),
   ]);
 
   const snap = await fetchSnapshot(session);

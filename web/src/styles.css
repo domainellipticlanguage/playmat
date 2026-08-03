@@ -502,6 +502,18 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   gap: 12px;
 }
 .modal h3 { margin: 0; color: var(--accent); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.modal-close {
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--ink-dim);
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.modal-close:hover { color: var(--ink); }
 .card-grid { display: flex; flex-wrap: wrap; gap: 10px; }
 .card-grid .gcard { width: 130px; cursor: pointer; position: relative; }
 .card-grid .gcard .mtg-card { display: block; width: 100%; }

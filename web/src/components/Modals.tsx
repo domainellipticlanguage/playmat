@@ -568,7 +568,10 @@ function ImportModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Backdrop onClose={onClose}>
-      <h3>Choose a deck</h3>
+      <div className="modal-head">
+        <h3>Choose a deck</h3>
+        <button className="modal-close" onClick={onClose} title="Close" aria-label="Close">✕</button>
+      </div>
       {savedDecks.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span className="subtle">Your decks (saved on this device — no re-resolving needed):</span>

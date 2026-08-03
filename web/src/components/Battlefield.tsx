@@ -405,11 +405,13 @@ export function Battlefield() {
     };
   };
 
-  const onWheel = (e: React.WheelEvent) => {
+  // Wheel and two-finger scroll zoom toward the cursor; pinch (which arrives
+  // as ctrl+wheel) zooms with matching sensitivity. React attaches onWheel
+  // passively — preventDefault there is a no-op plus a console warning — so
+  // the listener goes on the node directly, non-passive, via the effect below.
+  const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
+  wheelRef.current = (e: WheelEvent) => {
     e.preventDefault();
-    // Wheel and two-finger scroll zoom toward the cursor; pinch (which
-    // arrives as ctrl+wheel) zooms with matching sensitivity. Panning is
-    // right-drag on the background.
     const local = toLocal(e);
     const factor = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0012));
     setView((v) => {
@@ -418,6 +420,13 @@ export function Battlefield() {
       return clampView({ ...v, k, cx: local.x - (local.x - v.cx) * scale, cy: local.y - (local.y - v.cy) * scale });
     });
   };
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const h = (e: WheelEvent) => wheelRef.current(e);
+    el.addEventListener('wheel', h, { passive: false });
+    return () => el.removeEventListener('wheel', h);
+  }, []);
 
   const faceAngleOverride = prefs.faceOpponentCards ? seatAngle(mySeat) : null;
   const surfaceInset = 60;
@@ -450,7 +459,6 @@ export function Battlefield() {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
-      onWheel={onWheel}
       onContextMenu={(e) => {
         if (!(e.target as HTMLElement).closest('[data-guid]')) e.preventDefault();
       }}
