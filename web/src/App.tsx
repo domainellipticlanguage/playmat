@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useGame } from './store';
 import { Lobby } from './components/Lobby';
+import { About } from './components/About';
 import { Table } from './components/Table';
 import { startSession, stopSession } from './connection';
 import { persisted } from './session';
@@ -8,6 +9,19 @@ import { persisted } from './session';
 export function App() {
   const session = useGame((s) => s.session);
   const [restoring, setRestoring] = useState(true);
+
+  // #about is the only other "page". Hash routing keeps the back arrow and
+  // bookmarks working without pulling in a router for one static view.
+  const [showAbout, setShowAbout] = useState(location.hash === '#about');
+  useEffect(() => {
+    const onHash = () => {
+      setShowAbout(location.hash === '#about');
+      // Leaving via an href="#" link strands a bare trailing '#'; tidy it.
+      if (!location.hash) history.replaceState(null, '', location.pathname + location.search);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   // Auto-rejoin the last room if the tab reloads mid-game (R-6).
   //
@@ -75,5 +89,6 @@ export function App() {
       </div>
     );
   }
+  if (!session && showAbout) return <About />;
   return session ? <Table /> : <Lobby />;
 }

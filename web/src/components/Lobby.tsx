@@ -113,6 +113,9 @@ export function Lobby() {
           you're at the table.
         </div>
       </div>
+      <a className="lobby-link" href="#about">
+        About
+      </a>
     </div>
   );
 }
