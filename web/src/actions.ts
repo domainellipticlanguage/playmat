@@ -613,10 +613,12 @@ const TOKEN_FRAME: Record<string, string> = { W: 'white', U: 'blue', B: 'black',
 function tokenDataFrom(src: PoolCard): Record<string, unknown> {
   if (src.custom) return { ...src.custom };
   const face = src.sf?.faces[0];
-  const type = face?.type ?? '';
+  // "Token" leads the type line, ahead of supertypes — strip any existing
+  // placement first so odd sources ("Creature Token — X") still canonicalize.
+  const base = (face?.type ?? '').replace(/\s*\bToken\b\s*/g, ' ').replace(/\s+/g, ' ').trim();
   const data: Record<string, unknown> = {
     name: face?.name ?? src.sf?.name ?? 'Token',
-    typeLine: /\bToken\b/.test(type) ? type : `Token ${type || 'Copy'}`,
+    typeLine: `Token ${base || 'Copy'}`,
     rarity: 'common',
   };
   if (face?.oracle) data.abilities = face.oracle;
