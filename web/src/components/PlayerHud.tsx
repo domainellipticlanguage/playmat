@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { PlayerState, PoolCard, SeatRecord, ZoneName } from '@playmat/shared';
 import { useGame } from '../store';
 import { useUI } from '../uiStore';
@@ -539,15 +540,20 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, color: 'var(--ink-dim)' }}>🂠</div>
         </div>
       </div>
-      {pileDrag.ghost && (
-        <DragGhost
-          pool={pileDrag.ghost.pool}
-          rotIndex={pileDrag.ghost.rotIndex ?? 0}
-          faceDown={!pileDrag.ghost.pool}
-          x={pileDrag.ghost.x}
-          y={pileDrag.ghost.y}
-        />
-      )}
+      {pileDrag.ghost &&
+        // Portal: the ghost is position:fixed, but a transformed ancestor
+        // (.hud.pos-top's translateX) would become its containing block and
+        // offset it by the tray's position. From <body> it tracks the pointer.
+        createPortal(
+          <DragGhost
+            pool={pileDrag.ghost.pool}
+            rotIndex={pileDrag.ghost.rotIndex ?? 0}
+            faceDown={!pileDrag.ghost.pool}
+            x={pileDrag.ghost.x}
+            y={pileDrag.ghost.y}
+          />,
+          document.body
+        )}
     </div>
   );
 }
