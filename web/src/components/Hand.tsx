@@ -5,7 +5,7 @@ import { useUI } from '../uiStore';
 import * as actions from '../actions';
 import { handInsert } from '../handDrop';
 import { liveView, screenToWorld } from '../view';
-import { CardView, DragGhost, closeCrucibleMenus } from './CardView';
+import { CardView, DragGhost } from './CardView';
 
 /** Resting overlap, and the tightest we'll squeeze before cards get ungrabbable. */
 const REST_OVERLAP = -14;
@@ -101,7 +101,6 @@ export function Hand() {
 
   const onPointerDown = (guid: string) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    closeCrucibleMenus(); // preventDefault below suppresses the mousedown it needs
     dragRef.current = { guid, startX: e.clientX, startY: e.clientY, moved: false };
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     e.preventDefault();

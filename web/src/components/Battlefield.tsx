@@ -7,7 +7,6 @@ import { sendEphemeral } from '../connection';
 import * as actions from '../actions';
 import { handInsert } from '../handDrop';
 import { TableCard } from './TableCard';
-import { closeCrucibleMenus } from './CardView';
 import { paletteColor, playmatImageUrl } from '../colors';
 import {
   CARD_H,
@@ -189,15 +188,11 @@ export function Battlefield() {
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (useUI.getState().ctxMenu) return;
-    // A card's crucible menu portals into <body>, but React still bubbles its
-    // pointerdown through this component tree. Left unhandled we'd start a pan
-    // and setPointerCapture on the viewport, which steals the pointerup — so
-    // the menu item never receives a click and every entry looks dead. The
-    // menu stops mousedown, not pointerdown, hence this guard.
+    // Pressing inside an open menu must not start a pan: setPointerCapture on
+    // the viewport would steal the pointerup and every menu entry would look
+    // dead. Crucible ≥0.4.16 stops its menu's pointerdown itself; this guard
+    // backstops that and covers our own .ctx-menu.
     if ((e.target as HTMLElement).closest('.mtg-card-menu, .ctx-menu')) return;
-    // Clicking off an open crucible card menu must close it — our
-    // preventDefault below would otherwise swallow the mousedown it needs.
-    closeCrucibleMenus();
     const local = toLocal(e);
     pointersRef.current.set(e.pointerId, local);
     const world = screenToWorld(view, local.x, local.y);

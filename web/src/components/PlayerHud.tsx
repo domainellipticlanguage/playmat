@@ -6,7 +6,7 @@ import { useUI } from '../uiStore';
 import * as actions from '../actions';
 import { liveView, relativeEdge, screenToWorld } from '../view';
 import { paletteColor } from '../colors';
-import { CardView, DragGhost, closeCrucibleMenus } from './CardView';
+import { CardView, DragGhost } from './CardView';
 import { LinkIcon } from './icons';
 
 const PLAYER_COUNTERS = ['poison', 'energy', 'experience'];
@@ -33,7 +33,6 @@ function usePileDrag() {
 
   const start = (card: PileGhostCard, drop: PileDropFn) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    closeCrucibleMenus(); // preventDefault below suppresses the mousedown it needs
     dragRef.current = { startX: e.clientX, startY: e.clientY, moved: false, card, drop };
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     // Without this the browser starts a native HTML5 image drag, fires
