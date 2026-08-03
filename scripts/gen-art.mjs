@@ -81,7 +81,7 @@ mkdirSync('web/public', { recursive: true });
 if (which === 'table' || which === 'all') {
   const buf = await generate('table background', TABLE_MODEL, {
     prompt:
-      'A photographed texture of a large old wooden tavern table, seen perfectly top-down, the wood filling the entire frame edge to edge. Dark oak planks worn smooth and slightly glossy from years of use, subtle natural wood grain, faint knife marks and ring stains, soft warm candlelight falling from above with gentle vignetting toward the edges. Muted dark amber and umber tones, moody and atmospheric but understated — a background that stays quiet behind objects placed on it. Absolutely plain surface: no symbols, no carvings, no emblems, no compass, no text, no objects, no borders or frames.',
+      'A top-down texture of a large old (but well-maintained) wooden tavern table. No perspective, just flat wood-grain',
     aspect_ratio: '1:1',
     output_format: 'jpg',
   });
