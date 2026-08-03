@@ -17,20 +17,40 @@ export function About() {
           sitting at it. There's no rules engine and there are no accounts — the table is dumb; the
           players are smart.
         </p>
-        <p>
-          The cards themselves are drawn by{' '}
-          <a href="https://github.com/domainellipticlanguage/mtg-crucible" target="_blank" rel="noreferrer">
-            mtg-crucible
-          </a>
-          : every face on the table is its <code>MtgCard</code> component, custom tokens are
-          rendered right in your browser by its render engine (only JSON crosses the wire), and the
-          flip, transform, and battle orientations come from its <code>computeRotations</code>. You
-          can play with the card renderer on its own at the{' '}
-          <a href="https://domainellipticlanguage.com/project/mtg-crucible-playground/" target="_blank" rel="noreferrer">
-            crucible playground
-          </a>
-          .
-        </p>
+
+        <div className="credit">
+          <img src="/crucible.svg" alt="mtg-crucible logo" />
+          <div>
+            <h2>mtg-crucible</h2>
+            <div className="credit-tag">The card renderer that powers this table</div>
+            <p>
+              An open-source TypeScript library for rendering Magic: The Gathering cards. Every
+              face on this table is its <code>MtgCard</code> component, custom tokens are drawn
+              in-browser by its render engine on every client (only JSON crosses the wire), and
+              flip, transform, and battle orientations come from its <code>computeRotations</code>.
+              Try the renderer on its own at the{' '}
+              <a href="https://domainellipticlanguage.com/project/mtg-crucible-playground/" target="_blank" rel="noreferrer">
+                playground
+              </a>
+              .
+            </p>
+            <div className="credit-links">
+              <span>
+                GitHub:{' '}
+                <a href="https://github.com/domainellipticlanguage/mtg-crucible" target="_blank" rel="noreferrer">
+                  domainellipticlanguage/mtg-crucible
+                </a>
+              </span>
+              <span>
+                npm:{' '}
+                <a href="https://www.npmjs.com/package/mtg-crucible" target="_blank" rel="noreferrer">
+                  mtg-crucible
+                </a>
+              </span>
+            </div>
+          </div>
+        </div>
+
         <p>
           Card data and imagery are provided by{' '}
           <a href="https://scryfall.com" target="_blank" rel="noreferrer">

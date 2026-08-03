@@ -9,6 +9,8 @@ A shared virtual table for paper-style Magic: The Gathering. Load a deck, share 
 room. The table is dumb; the players are smart — no rules engine, no accounts,
 scale-to-zero AWS backend.
 
+**It's hosted at [playmat.domainellipticlanguage.com](https://playmat.domainellipticlanguage.com) — try it out!**
+
 Powered by [mtg-crucible](https://github.com/domainellipticlanguage/mtg-crucible):
 every card face on the table is crucible's `MtgCard` React component, custom
 tokens are drawn in-browser by its render engine on every client (only JSON goes
