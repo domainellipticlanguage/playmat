@@ -22,7 +22,11 @@
 html, body, #root {
   margin: 0;
   height: 100%;
+  /* Phones: 100dvh tracks the URL bar's show/hide so the app exactly fills
+     the visible viewport — with plain 100% the page gains a scrollable gap. */
+  height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--ink);
   font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
@@ -326,7 +330,9 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   z-index: 1;
 }
 .hud-collapse:hover { color: var(--accent); border: none; }
-.hud.collapsed { padding: 5px 26px 5px 10px; }
+/* Collapsed tray: whole thing is a tap-to-expand target, and it sits above
+   the hand strip (z 25) so hand cards can't bury the tap. */
+.hud.collapsed { padding: 5px 26px 5px 10px; cursor: pointer; z-index: 26; }
 .hud-mini { display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
 .hud-mini .mini-stat { color: var(--ink-dim); }
 .hud .name { font-weight: bold; display: flex; align-items: center; gap: 6px; }
@@ -662,4 +668,10 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   .hover-preview { width: 240px; }
   .side-panel { width: 240px; }
   .help-hint { display: none; }
+}
+
+/* Phones: trays start collapsed (PlayerHud), so the hand can take the full
+   width — the collapsed tray rides above it (z 26) and stays tappable. */
+@media (max-width: 700px) {
+  .hand-strip { left: 8px; right: 8px; }
 }

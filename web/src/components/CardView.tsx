@@ -22,6 +22,18 @@ const NO_CARD: PoolCard = { guid: '', ownerId: '' };
  * is a document-level mousedown. Dispatch one after the action so picking an
  * item dismisses the menu like you'd expect. (Worth fixing upstream.)
  */
+/**
+ * Close any open crucible card menu. Its only outside-close path is a
+ * document-level mousedown — which never fires from our drag surfaces,
+ * because their pointerdown handlers preventDefault (suppressing the
+ * compatibility mouse events). Call this at the top of those handlers.
+ */
+export function closeCrucibleMenus(): void {
+  if (document.querySelector('.mtg-card-menu')) {
+    document.dispatchEvent(new MouseEvent('mousedown'));
+  }
+}
+
 export function withMenuClose(items: MtgCardMenuItem[]): MtgCardMenuItem[] {
   return items.map((m) => ({
     ...m,

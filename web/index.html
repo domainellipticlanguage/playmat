@@ -2,7 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- maximum-scale=1: stops iOS from zooming the page when an input
+         focuses (the deck picker autofocuses one) and from accidental page
+         pinches — that residual zoom is where phantom scroll comes from.
+         The battlefield's own pinch-zoom is pointer-event based, unaffected. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Playmat</title>
   </head>

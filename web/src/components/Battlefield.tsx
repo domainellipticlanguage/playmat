@@ -7,6 +7,7 @@ import { sendEphemeral } from '../connection';
 import * as actions from '../actions';
 import { handInsert } from '../handDrop';
 import { TableCard } from './TableCard';
+import { closeCrucibleMenus } from './CardView';
 import { paletteColor, playmatImageUrl } from '../colors';
 import {
   CARD_H,
@@ -194,6 +195,9 @@ export function Battlefield() {
     // the menu item never receives a click and every entry looks dead. The
     // menu stops mousedown, not pointerdown, hence this guard.
     if ((e.target as HTMLElement).closest('.mtg-card-menu, .ctx-menu')) return;
+    // Clicking off an open crucible card menu must close it — our
+    // preventDefault below would otherwise swallow the mousedown it needs.
+    closeCrucibleMenus();
     const local = toLocal(e);
     pointersRef.current.set(e.pointerId, local);
     const world = screenToWorld(view, local.x, local.y);
@@ -243,9 +247,9 @@ export function Battlefield() {
     }
 
     // Everything else drags the view: left/touch on the background, middle
-    // button, right-drag on the background (cards keep their context menu),
-    // or alt+drag from anywhere.
-    if (e.button > 2 || (e.button === 2 && cardEl)) return;
+    // button, or alt+drag from anywhere. Right-click never pans — the
+    // background right-click opens the table menu (see onContextMenu).
+    if (e.button !== 0 && e.button !== 1) return;
     // Plain click empties the selection; shift-click misses the card it was
     // aiming to add — punishing that with a dead selection is cruel.
     if (e.button === 0 && !e.altKey && !e.shiftKey) useGame.getState().setSelection([]);
@@ -471,7 +475,39 @@ export function Battlefield() {
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
       onContextMenu={(e) => {
-        if (!(e.target as HTMLElement).closest('[data-guid]')) e.preventDefault();
+        // Cards keep their crucible menu; the background gets the table menu.
+        if ((e.target as HTMLElement).closest('[data-guid]')) return;
+        e.preventDefault();
+        if (!session || session.seat === null) return;
+        const local = toLocal(e);
+        const world = screenToWorld(view, local.x, local.y);
+        const st = useGame.getState();
+        const mine = Object.values(st.cards).filter(
+          (c) => c.zone === 'battlefield' && c.controllerId === session.playerId
+        );
+        useUI.getState().openCtxMenu({
+          x: e.clientX,
+          y: e.clientY,
+          items: [
+            { label: 'Untap all  (U)', action: () => actions.untapAll() },
+            {
+              label: 'Tap all',
+              action: () => actions.tapCards(mine.filter((c) => !c.tapped).map((c) => c.guid), true),
+            },
+            { sep: true, label: '' },
+            { label: 'Take turn — untap, upkeep, draw', action: () => actions.takeTurn() },
+            { sep: true, label: '' },
+            {
+              label: 'Create token here…',
+              action: () => useUI.getState().openModal({ kind: 'tokens', at: world }),
+            },
+            { sep: true, label: '' },
+            {
+              label: `Select all my cards (${mine.length})`,
+              action: () => st.setSelection(mine.map((c) => c.guid)),
+            },
+          ],
+        });
       }}
     >
       <div className="world" style={{ transform: worldTransform }}>

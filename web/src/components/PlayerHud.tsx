@@ -6,7 +6,7 @@ import { useUI } from '../uiStore';
 import * as actions from '../actions';
 import { liveView, relativeEdge, screenToWorld } from '../view';
 import { paletteColor } from '../colors';
-import { CardView, DragGhost } from './CardView';
+import { CardView, DragGhost, closeCrucibleMenus } from './CardView';
 import { LinkIcon } from './icons';
 
 const PLAYER_COUNTERS = ['poison', 'energy', 'experience'];
@@ -33,6 +33,7 @@ function usePileDrag() {
 
   const start = (card: PileGhostCard, drop: PileDropFn) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;
+    closeCrucibleMenus(); // preventDefault below suppresses the mousedown it needs
     dragRef.current = { startX: e.clientX, startY: e.clientY, moved: false, card, drop };
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     // Without this the browser starts a native HTML5 image drag, fires
@@ -209,6 +210,60 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
   const handCount = isMe ? hidden.hand.length : state.handCount;
   const topRevealedPool = state.topRevealed ? pool[state.topRevealed] : null;
 
+  /**
+   * Right-click menus for the public piles (Archidekt parity). Browsing works
+   * on anyone's; bulk operations only on your own (cards route to their
+   * owner's zones anyway — this just keeps the menu honest).
+   */
+  const pileMenu = (zone: 'graveyard' | 'exile' | 'command') => (e: React.MouseEvent) => {
+    e.preventDefault();
+    const ui = useUI.getState();
+    const list = zone === 'graveyard' ? piles.gy : zone === 'exile' ? piles.exile : piles.command;
+    const whose = isMe ? '' : `${player.name}'s `;
+    const items: NonNullable<Parameters<typeof ui.openCtxMenu>[0]>['items'] = [];
+    if (zone === 'command' && isMe) {
+      for (const c of list) {
+        const name = pool[c.guid]?.sf?.name ?? 'commander';
+        const tax = (c.counters['tax'] ?? 0) * 2;
+        items.push({
+          label: `Play ${name}${tax > 0 ? ` (tax +${tax})` : ''}`,
+          action: () =>
+            actions.moveCard(c.guid, { zone: 'battlefield', ...actions.autoPlayPosition(c.guid) }),
+        });
+      }
+      if (list.length === 1) {
+        const c = list[0];
+        const tax = c.counters['tax'] ?? 0;
+        items.push({
+          label: `Command tax: +${tax * 2} (raise)`,
+          action: () => actions.setCounter(c.guid, 'tax', tax + 1),
+        });
+      }
+      if (items.length) items.push({ sep: true, label: '' });
+    }
+    items.push({
+      label: `View ${whose}${zone === 'command' ? 'command zone' : zone} (${list.length})`,
+      action: () => ui.openModal({ kind: 'zone', zone, zoneOwnerId: pid }),
+    });
+    if (zone === 'graveyard' && isMe && list.length > 0) {
+      items.push({ sep: true, label: '' });
+      items.push({
+        label: 'Exile all',
+        action: () => {
+          for (const c of piles.gy) actions.moveCard(c.guid, { zone: 'exile' });
+        },
+      });
+      items.push({
+        label: 'Shuffle into library',
+        action: () => {
+          for (const c of piles.gy) actions.moveCard(c.guid, { zone: 'library', libPos: 'top' });
+          actions.shuffleLibrary();
+        },
+      });
+    }
+    ui.openCtxMenu({ x: e.clientX, y: e.clientY, items });
+  };
+
   const libraryMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     const ui = useUI.getState();
@@ -312,11 +367,18 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
 
   // Client-only: fold the tray down to a stat line so it stops hiding the
   // battlefield. Piles aren't drop targets while collapsed — expand to drop.
-  const [collapsed, setCollapsed] = useState(false);
+  // Phones start collapsed: an expanded tray buries half the hand strip.
+  const [collapsed, setCollapsed] = useState(
+    () => window.matchMedia('(max-width: 700px)').matches
+  );
 
   if (collapsed) {
     return (
-      <div className={`hud collapsed pos-${edge}${room?.turnPlayerId === pid ? ' turn' : ''}`}>
+      <div
+        className={`hud collapsed pos-${edge}${room?.turnPlayerId === pid ? ' turn' : ''}`}
+        title="Tap to expand player tray"
+        onClick={() => setCollapsed(false)}
+      >
         <button className="hud-collapse" title="Expand player tray" onClick={() => setCollapsed(false)}>
           ▸
         </button>
@@ -488,6 +550,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         <div
           className="pile"
           data-drop={`graveyard:${pid}`}
+          onContextMenu={pileMenu('graveyard')}
           onClick={pileDrag.guardClick(() =>
             useUI.getState().openModal({ kind: 'zone', zone: 'graveyard', zoneOwnerId: pid })
           )}
@@ -512,6 +575,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         <div
           className="pile"
           data-drop={`exile:${pid}`}
+          onContextMenu={pileMenu('exile')}
           onClick={pileDrag.guardClick(() =>
             useUI.getState().openModal({ kind: 'zone', zone: 'exile', zoneOwnerId: pid })
           )}
@@ -536,6 +600,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         <div
           className="pile"
           data-drop={`command:${pid}`}
+          onContextMenu={pileMenu('command')}
           onClick={pileDrag.guardClick(() =>
             useUI.getState().openModal({ kind: 'zone', zone: 'command', zoneOwnerId: pid })
           )}
