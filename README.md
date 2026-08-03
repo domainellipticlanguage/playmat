@@ -68,20 +68,31 @@ The JWT signing key is generated on first synth into `infra/.jwt-key`
 
 Rooms (create/join/rejoin with reserved seats/spectators for 5th+), decklist
 paste + Archidekt URL import (commander inference from `// Commander`, `*CMDR*`,
-`[Commander]` category, or manual pick), Scryfall resolution via
-`/cards/collection` (75 cards/request, client-side), all six zones per player,
-drag/multi-select/marquee/click-to-tap, transform & flip & battle rotations via
-mtg-crucible (`computeRotations`; battles enter sideways), face-down/morph,
-arbitrary card counters + effective P/T, tokens (Scryfall search, quick picks,
-custom tokens rendered in-browser by crucible on every client), life ±1/±5,
-commander damage that ticks life, poison/energy/experience, shared d6/d20/dN/coin
-with synced animation, decorative turn marker + take-turn shortcut (untap-all +
-draw), scry/surveil/peek with reorder, search library (auto-shuffle on close),
-mill, play-with-top-revealed, reveal-from-hand, teaching mode ("show my hand to
-the table"), event log, per-seat table rotation with optional
-face-all-cards-toward-me, hover card preview, presence dots + remote cursors,
-board reset with confirmation, keyboard shortcuts (D draw, U untap, T tap
-selection).
+`[Commander]` category, or manual pick; a clean resolve auto-chooses the deck),
+saved decks with commander-art thumbnails, Scryfall resolution via
+`/cards/collection` (75 cards/request, client-side), opening-hand modal with
+London mulligan (keep/mull, bottom the extras), all six zones per player,
+drag/multi-select/click-to-tap (shift+click multiselect; Figma-style pan/pinch
+table gestures), a hand that behaves like physical cards (drag to reorder,
+neighbors part to make room, one card — no ghost doubles), transform & flip &
+battle rotations via mtg-crucible (`computeRotations`; battles enter sideways),
+face-down/morph, arbitrary card counters + effective P/T, tokens (Scryfall
+search, quick picks, custom tokens rendered in-browser by crucible on every
+client; copy-as-token gets a proper token frame, and tokens cease to exist when
+they leave the battlefield), life ±1/±5, commander damage that ticks life,
+poison/energy/experience, shared d6/d20/dN/coin with synced animation,
+decorative turn marker + take-turn shortcut (untap-all + draw), scry/surveil/
+peek with reorder, search library (auto-shuffle on close), mill (Archidekt-style
+submenu, yours or a peer's library), play-with-top-revealed, reveal-from-hand,
+teaching mode ("show my hand to the table"), right-click context menus on every
+surface (cards, hand, piles, library, battlefield background), per-player
+playmats (seat-color pattern, commander art crop, or custom URL), event log,
+per-seat table rotation with optional face-all-cards-toward-me, hover card
+preview, connectivity status in the player trays + remote cursors, board reset
+with confirmation, phone-friendly layout (touch drags on every surface,
+tap-to-expand collapsed trays), keyboard shortcuts (D draw, U untap, T tap,
+N select all mine — plus hover-targeted: M mills the library under the cursor,
+P plays the hovered hand card, shift for face down).
 
 ## Testing
 
