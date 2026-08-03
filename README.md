@@ -112,8 +112,13 @@ P plays the hovered hand card, shift for face down).
 
 ```bash
 npm test                      # shared parser/protocol units + local-server e2e
+npm run test:mobile           # phone-viewport smoke w/ real touch input (needs `npm run dev` up)
 node scripts/smoke-aws.mjs    # against the deployed stack
 ```
+
+The mobile smoke drives headless Chromium at Pixel dimensions and dispatches
+CDP touch events, so Chrome runs its real gesture arbitration — a drag that
+only works with a mouse fails here.
 
 The e2e test spawns the real local server and drives two WebSocket clients
 through join → import → play → tap-by-opponent → snapshot → re-import →
