@@ -17,9 +17,7 @@ tokens are drawn in-browser by its render engine on every client (only JSON goes
 over the wire), and flip/transform/battle orientations come from its
 `computeRotations`.
 
-<!-- Gameplay screenshot goes here so people know what to expect:
-![A Commander game in progress on Playmat](docs/screenshot.png)
--->
+![A Commander game in progress on Playmat](docs/screenshot.jpg)
 
 Requirements & design doc: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 
