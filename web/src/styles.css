@@ -348,7 +348,9 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .hud.collapsed { padding: 5px 26px 5px 10px; cursor: pointer; z-index: 26; }
 .hud-mini { display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
 .hud-mini .mini-stat { color: var(--ink-dim); }
-.hud .name { font-weight: bold; display: flex; align-items: center; gap: 6px; }
+/* The header row collapses the tray on tap — the ▾ chevron alone is a tiny
+   target on a phone. Mirrors the collapsed tray's tap-anywhere-to-expand. */
+.hud .name { font-weight: bold; display: flex; align-items: center; gap: 6px; cursor: pointer; }
 /* Link / link-slash icon — a dot here read as a second color swatch. */
 .presence { display: inline-flex; align-items: center; color: var(--ink-dim); }
 /* Active-player chip — the green presence dot is connectivity, not turn. */
@@ -448,8 +450,15 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   align-items: flex-end;
   z-index: 25;
   padding: 0 8px;
+  /* The strip is an invisible bar riding above the trays (z 25 vs 20) — it
+     must never swallow clicks meant for what's beneath it (the collapse
+     chevron was unclickable wherever they overlapped). Cards re-enable
+     themselves; drops on the strip are detected by geometry, not hit-testing
+     (elementFromPoint can't see a pointer-events:none element). */
+  pointer-events: none;
 }
 .hand-card {
+  pointer-events: auto; /* the strip around them is pointer-events:none */
   width: 108px;
   /* Overlap is set per-hand by Hand.tsx so the fan always fits the strip. */
   margin: 0 var(--hand-overlap, -14px);
@@ -690,4 +699,9 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 @media (max-width: 700px) {
   .hand-strip { left: 8px; right: 8px; }
   .hud.pos-bottom { bottom: 104px; }
+  /* An expanded tray is wider than a phone — unconstrained it overflows the
+     screen and strands the collapse chevron (top-right) unreachable. Cap it
+     to the viewport and let the piles row wrap under the header instead. */
+  .hud { max-width: calc(100vw - 20px); flex-wrap: wrap; }
+  .piles { flex-wrap: wrap; }
 }

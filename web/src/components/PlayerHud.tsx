@@ -65,6 +65,19 @@ function usePileDrag() {
     useUI.getState().setDragging(null);
     if (!d?.moved) return; // plain click — let onClick handle it
     suppressClick.current = true;
+    // The hand strip is pointer-events:none so it can't swallow clicks on
+    // things beneath it — which also hides it from elementFromPoint. Detect
+    // hand drops by geometry instead (same inflated top as Hand's tracker).
+    const strip = document.querySelector('.hand-strip')?.getBoundingClientRect();
+    if (
+      strip &&
+      e.clientX >= strip.left && e.clientX <= strip.right &&
+      e.clientY >= strip.top - 24 && e.clientY <= strip.bottom
+    ) {
+      const me = useGame.getState().session?.playerId;
+      if (me) d.drop({ kind: 'zone', zone: 'hand', zoneOwnerId: me }, e.shiftKey);
+      return;
+    }
     const el = document.elementFromPoint(e.clientX, e.clientY);
     const zoneEl = el?.closest('[data-drop]') as HTMLElement | null;
     if (zoneEl) {
@@ -402,7 +415,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         ▾
       </button>
       <div className="who">
-        <div className="name">
+        <div className="name" title="Tap to collapse player tray" onClick={() => setCollapsed(true)}>
           <span className={`presence ${presenceClass}`} title={presenceTitle}>
             <LinkIcon slashed={presenceClass !== 'connected'} size={12} />
           </span>
