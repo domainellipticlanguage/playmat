@@ -395,7 +395,12 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   padding: 0 6px;
   font-weight: bold;
 }
-.pile.droptarget { border-color: var(--accent); box-shadow: 0 0 12px var(--accent-soft); }
+/* A drag is hovering this pile and the drop will land (see Table's tracker):
+   ring + glow stay visible even when a top card covers the pile face. */
+.pile.droptarget {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent), 0 0 14px var(--accent-soft);
+}
 
 .revealed-strip { display: flex; gap: 3px; }
 .revealed-strip .rev-card { width: 40px; }

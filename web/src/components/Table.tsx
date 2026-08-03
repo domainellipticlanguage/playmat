@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ZoneName } from '@playmat/shared';
 import { useGame } from '../store';
 import { useUI } from '../uiStore';
 import * as actions from '../actions';
@@ -49,6 +50,38 @@ export function Table() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [spectator]);
+
+  // Light the pile under a live drag, matching the hand strip's confirmation.
+  // The dragging component holds pointer capture, so piles never get their own
+  // pointer events — track at window level and toggle the class straight on
+  // the DOM (no re-renders at pointer rate).
+  const dragging = useUI((s) => s.dragging);
+  useEffect(() => {
+    if (!dragging) return;
+    let lit: HTMLElement | null = null;
+    const relight = (el: HTMLElement | null) => {
+      if (el === lit) return;
+      lit?.classList.remove('droptarget');
+      lit = el;
+      lit?.classList.add('droptarget');
+    };
+    const onMove = (e: PointerEvent) => {
+      let el = (document
+        .elementFromPoint(e.clientX, e.clientY)
+        ?.closest('.pile[data-drop]') ?? null) as HTMLElement | null;
+      if (el && dragging !== 'pile') {
+        // Only promise drops that will land: someone else's pile refuses.
+        const [zone, zoneOwnerId] = el.dataset.drop!.split(':');
+        if (!actions.canPlaceIn(dragging, zone as ZoneName, zoneOwnerId || undefined)) el = null;
+      }
+      relight(el);
+    };
+    window.addEventListener('pointermove', onMove);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      relight(null);
+    };
+  }, [dragging]);
 
   // Fresh arrival with no deck: open the deck picker for them. Gated on the
   // snapshot so a returning player (whose pool just hasn't loaded yet) isn't

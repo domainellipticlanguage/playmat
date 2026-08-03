@@ -44,7 +44,10 @@ export function Hand() {
     if (!el) return;
     const fit = () => {
       const avail = el.clientWidth - 16; // .hand-strip padding
-      const n = hand.length;
+      // Count what's actually visible: the lifted card is width 0, and fitting
+      // for it anyway would space the fan differently mid-drag than after the
+      // drop lands (hand.length and lifted change together, so no re-snap).
+      const n = hand.length - (lifted ? 1 : 0);
       if (n < 2 || avail <= 0) return setOverlap(REST_OVERLAP);
       // Measured, not hardcoded: .hand-card width changes with the compact
       // media query, and the strip resizes with the window either way.
@@ -57,7 +60,7 @@ export function Hand() {
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [hand.length]);
+  }, [hand.length, lifted]);
 
   // While a droppable drag is live (from the hand OR the battlefield), track
   // the pointer at window level: the dragging component holds pointer capture,

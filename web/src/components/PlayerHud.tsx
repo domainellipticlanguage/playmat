@@ -50,7 +50,9 @@ function usePileDrag() {
     if (!d) return;
     if (!d.moved && Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 6) {
       d.moved = true;
-      useUI.getState().setDragging('pile');
+      // The real guid when we know it, so drop targets can gate on ownership;
+      // 'pile' is the fallback sentinel (e.g. a face-down library top).
+      useUI.getState().setDragging(d.card.pool?.guid ?? 'pile');
     }
     if (d.moved) setGhost({ ...d.card, x: e.clientX, y: e.clientY });
   };
