@@ -336,7 +336,8 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .hud-mini { display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
 .hud-mini .mini-stat { color: var(--ink-dim); }
 .hud .name { font-weight: bold; display: flex; align-items: center; gap: 6px; }
-.presence { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-dim); }
+/* Link / link-slash icon — a dot here read as a second color swatch. */
+.presence { display: inline-flex; align-items: center; color: var(--ink-dim); }
 /* Active-player chip — the green presence dot is connectivity, not turn. */
 .turn-badge {
   background: var(--accent);
@@ -348,8 +349,8 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   text-transform: uppercase;
   padding: 1px 7px;
 }
-.presence.connected { background: var(--ok); }
-.presence.away { background: var(--warn); }
+.presence.connected { color: var(--ok); }
+.presence.away { color: var(--warn); }
 
 .life { display: flex; align-items: center; gap: 6px; }
 .life .total {
@@ -433,7 +434,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   width: 108px;
   /* Overlap is set per-hand by Hand.tsx so the fan always fits the strip. */
   margin: 0 var(--hand-overlap, -14px);
-  transition: transform 120ms ease, margin 120ms ease;
+  transition: transform 120ms ease, margin 120ms ease, width 120ms ease;
   position: relative;
   cursor: grab;
   transform: translateY(34px);
@@ -445,6 +446,25 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   -webkit-touch-callout: none;
 }
 .hand-card:hover { transform: translateY(-22px) scale(1.35); z-index: 5; margin: 0 24px; }
+/* Mid-drag the card leaves the fan bodily: it collapses so neighbors close
+   the gap, and only the pointer ghost remains — one physical card. It stays
+   mounted (display:none would drop its pointer capture and kill the drag). */
+.hand-card.lifted { width: 0; margin: 0; }
+.hand-card.lifted .mtg-card { visibility: hidden; }
+/* A drag that could drop here is live: give an empty strip a landing zone,
+   and stop the hover pop-up from fighting the insertion gap. */
+.hand-strip.drop-ready { min-height: 90px; }
+.hand-strip.drop-ready .hand-card:hover {
+  transform: translateY(34px);
+  margin: 0 var(--hand-overlap, -14px);
+  z-index: auto;
+}
+/* Pointer is over the strip: confirm the hand will take the drop. */
+.hand-strip.drop-hover {
+  background: linear-gradient(to top, var(--accent-soft), transparent 80%);
+  border-radius: 14px 14px 0 0;
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
 .hand-card .mtg-card { display: block; width: 100%; }
 .hand-card .mtg-card-face { border-radius: 6px !important; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7) !important; }
 /* Top-LEFT corner: the top-right would sit on the card's mana cost. */

@@ -5,6 +5,7 @@ import { useGame } from '../store';
 import { useUI } from '../uiStore';
 import { sendEphemeral } from '../connection';
 import * as actions from '../actions';
+import { handInsert } from '../handDrop';
 import { TableCard } from './TableCard';
 import { paletteColor, playmatImageUrl } from '../colors';
 import {
@@ -319,6 +320,8 @@ export function Battlefield() {
 
     const drag = dragRef.current;
     if (drag && e.pointerId !== drag.pointerId) return;
+    // Read before setDragging(null) — Hand's tracking effect clears it.
+    const handSlot = handInsert.index;
     dragRef.current = null;
     useUI.getState().setDragging(null);
 
@@ -335,14 +338,20 @@ export function Battlefield() {
       const target = document
         .elementFromPoint(e.clientX, e.clientY)
         ?.closest('[data-drop]') as HTMLElement | null;
-      if (target) {
-        const [zone, zoneOwnerId] = target.dataset.drop!.split(':');
+      // The hand's open slot is authoritative when it's showing (its hit zone
+      // is a touch taller than the strip): the fan promised this drop.
+      if (target || handSlot != null) {
+        const [zone, zoneOwnerId] =
+          handSlot != null ? ['hand', session?.playerId ?? ''] : target!.dataset.drop!.split(':');
         const refused: string[] = [];
+        // Dropping into the hand strip lands at the slot the fan opened;
+        // incrementing keeps a group drop in its dragged order.
+        let slot = zone === 'hand' ? handSlot : null;
         for (const g of drag.guids) {
           // Another player's pile rejects the drop (the card snaps back) rather
           // than quietly rerouting to your own zone of the same kind.
           if (actions.canPlaceIn(g, zone as ZoneName, zoneOwnerId || undefined)) {
-            actions.moveCard(g, { zone: zone as ZoneName });
+            actions.moveCard(g, { zone: zone as ZoneName, handIndex: slot == null ? undefined : slot++ });
           } else {
             refused.push(g);
           }

@@ -90,22 +90,25 @@ export function DragGhost({
   faceDown = false,
   x,
   y,
+  w,
 }: {
   pool?: PoolCard | null;
   rotIndex?: number;
   faceDown?: boolean;
   x: number;
   y: number;
+  /** Override width — e.g. hand-card size while hovering the hand strip. */
+  w?: number;
 }) {
-  const w = Math.max(56, Math.min(240, CARD_W * liveView.current.k));
-  const h = (w * 7) / 5;
+  const width = w ?? Math.max(56, Math.min(240, CARD_W * liveView.current.k));
+  const h = (width * 7) / 5;
   return (
     <CardView
       className="card-ghost"
       pool={pool}
       rotIndex={rotIndex}
       faceDown={faceDown}
-      style={{ position: 'fixed', width: w, left: x - w / 2, top: y - h / 2 }}
+      style={{ position: 'fixed', width, left: x - width / 2, top: y - h / 2, transition: 'width 120ms ease' }}
     />
   );
 }

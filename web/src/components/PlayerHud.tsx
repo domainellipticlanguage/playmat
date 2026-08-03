@@ -6,6 +6,7 @@ import * as actions from '../actions';
 import { liveView, relativeEdge, screenToWorld } from '../view';
 import { paletteColor } from '../colors';
 import { CardView, DragGhost } from './CardView';
+import { LinkIcon } from './icons';
 
 const PLAYER_COUNTERS = ['poison', 'energy', 'experience'];
 
@@ -276,7 +277,9 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           ▸
         </button>
         <div className="hud-mini">
-          <span className={`presence ${presenceClass}`} title={presenceClass || 'not seen yet'} />
+          <span className={`presence ${presenceClass}`} title={presenceClass || 'not seen yet'}>
+            <LinkIcon slashed={presenceClass !== 'connected'} size={12} />
+          </span>
           <span className="player-chip" style={{ background: paletteColor(state.color, player.seat).hex }} />
           <b>{player.name}</b>
           {room?.turnPlayerId === pid && <span className="turn-badge">▶ turn</span>}
@@ -295,7 +298,9 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
       </button>
       <div className="who">
         <div className="name">
-          <span className={`presence ${presenceClass}`} title={presenceClass || 'not seen yet'} />
+          <span className={`presence ${presenceClass}`} title={presenceClass || 'not seen yet'}>
+            <LinkIcon slashed={presenceClass !== 'connected'} size={12} />
+          </span>
           <span
             className="player-chip"
             title={`${player.name}'s color — their playmat and card rings`}

@@ -172,10 +172,17 @@ function removeFromHidden(guid: string): 'library' | 'hand' | null {
   return null;
 }
 
-function addToHidden(guid: string, zone: 'library' | 'hand', libPos: 'top' | 'bottom' | number = 'top'): void {
+function addToHidden(
+  guid: string,
+  zone: 'library' | 'hand',
+  libPos: 'top' | 'bottom' | number = 'top',
+  handIndex?: number
+): void {
   const { s } = ctx();
   if (zone === 'hand') {
-    s.setHidden(s.hidden.library, [...s.hidden.hand, guid]);
+    const hand = s.hidden.hand.slice();
+    hand.splice(Math.min(Math.max(handIndex ?? hand.length, 0), hand.length), 0, guid);
+    s.setHidden(s.hidden.library, hand);
     return;
   }
   const library = s.hidden.library.slice();
@@ -223,6 +230,8 @@ export interface MoveTarget {
   x?: number;
   y?: number;
   libPos?: 'top' | 'bottom' | number;
+  /** Insertion slot when the zone is my hand (default: rightmost). */
+  handIndex?: number;
   faceDown?: boolean;
 }
 
@@ -357,7 +366,7 @@ export function moveCard(guid: string, target: MoveTarget): void {
   const targetIsMyHidden = HIDDEN_ZONES.includes(target.zone) && zoneOwnerId === me;
 
   if (targetIsMyHidden) {
-    addToHidden(guid, target.zone as 'library' | 'hand', target.libPos ?? 'top');
+    addToHidden(guid, target.zone as 'library' | 'hand', target.libPos ?? 'top', target.handIndex);
     // Only publish a removal marker if peers currently see this card.
     if (wasPublic || s.cards[guid]) events.push(cardEvent(next));
   } else {
@@ -375,6 +384,15 @@ export function moveCard(guid: string, target: MoveTarget): void {
 
 export function playFromHand(guid: string, x: number, y: number, faceDown = false): void {
   moveCard(guid, { zone: 'battlefield', x, y, faceDown });
+}
+
+/** Reorder my hand locally — order is private, so nothing is published. */
+export function reorderHand(guid: string, toIndex: number): void {
+  const { s } = ctx();
+  if (!s.hidden.hand.includes(guid)) return;
+  const hand = s.hidden.hand.filter((g) => g !== guid);
+  hand.splice(Math.min(Math.max(toIndex, 0), hand.length), 0, guid);
+  s.setHidden(s.hidden.library, hand);
 }
 
 export function setCardPosition(guid: string, x: number, y: number): void {

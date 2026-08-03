@@ -11,25 +11,19 @@ import { ModalHost } from './Modals';
 import { ContextMenuHost } from './ContextMenu';
 import { DiceOverlay, HoverPreview, LogPanel } from './Panels';
 import { TABLE, liveView, screenToWorld } from '../view';
+import { LinkIcon } from './icons';
 import type { TransportStatus } from '../transport';
 
-/** Wifi / wifi-off glyph for the topbar — clearer than a colored dot. */
+/** Link / link-slash glyph for the topbar: linked to the room, or not. */
 function ConnIcon({ status }: { status: TransportStatus }) {
   const label =
     status === 'connected' ? 'Connected' :
     status === 'reconnecting' ? 'Reconnecting…' :
     status === 'connecting' ? 'Connecting…' :
     'Disconnected';
-  const off = status === 'dead' || status === 'idle';
   return (
     <span className={`conn-icon ${status}`} title={label} aria-label={label} role="img">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-        <path d="M2.5 9.5a14 14 0 0 1 19 0" />
-        <path d="M5.5 13a9.5 9.5 0 0 1 13 0" />
-        <path d="M8.7 16.4a5 5 0 0 1 6.6 0" />
-        <circle cx="12" cy="19.6" r="1.4" fill="currentColor" stroke="none" />
-        {off && <line x1="3" y1="2.5" x2="21" y2="20.5" />}
-      </svg>
+      <LinkIcon slashed={status !== 'connected'} />
     </span>
   );
 }
