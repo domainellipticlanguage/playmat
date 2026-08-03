@@ -246,7 +246,9 @@ export function Battlefield() {
     // button, right-drag on the background (cards keep their context menu),
     // or alt+drag from anywhere.
     if (e.button > 2 || (e.button === 2 && cardEl)) return;
-    if (e.button === 0 && !e.altKey) useGame.getState().setSelection([]);
+    // Plain click empties the selection; shift-click misses the card it was
+    // aiming to add — punishing that with a dead selection is cruel.
+    if (e.button === 0 && !e.altKey && !e.shiftKey) useGame.getState().setSelection([]);
     gestureRef.current = { mode: 'pan', pointerId: e.pointerId, startX: local.x, startY: local.y, cx: view.cx, cy: view.cy };
     viewportRef.current!.setPointerCapture(e.pointerId);
     e.preventDefault();
