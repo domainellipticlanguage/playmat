@@ -767,20 +767,19 @@ export function runNewGameSetup(gameId: string): void {
       card: { ...defaultCardState(c.guid), zone: 'command', order: i + 1 },
     });
   });
-  events.push({
-    t: 'player', g: gameId, by: me, seq: nextSeq(`player#${me}`),
-    player: {
-      playerId: me,
-      seat: s.session!.seat ?? 0,
-      name: s.session!.name,
-      life: s.prefs.defaultLife,
-      counters: {},
-      commanderDamage: {},
-      handCount: hand.length,
-      libraryCount: library.length,
-      topRevealed: null,
-    },
-  });
+  // Fresh game state via myPlayerState, NOT a bare literal: identity fields
+  // (color, playmat, library order) must survive the reset — a literal without
+  // color made players snap back to their seat-default color at shuffle-up.
+  events.push(
+    playerEvent(
+      myPlayerState({
+        life: s.prefs.defaultLife,
+        counters: {},
+        commanderDamage: {},
+        topRevealed: null,
+      })
+    )
+  );
   syncHandReveals(events);
   sendState(events);
   flushHidden();

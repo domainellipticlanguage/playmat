@@ -149,6 +149,15 @@ export async function startSession(session: StoredSession): Promise<void> {
   useGame.getState().applySnapshot(snap);
   adoptExistingSetup();
 
+  // Publish identity (color/playmat ride on PlayerState) right away: until
+  // the first publish, everyone renders seat-default colors, so a player with
+  // a saved color pick would visibly change color on their first action.
+  if (session.seat !== null) {
+    queueMicrotask(() => {
+      void import('./actions').then((a) => a.publishMyCounts());
+    });
+  }
+
   client.onReconnected(() => {
     void fetchSnapshot(session)
       .then((s) => {
