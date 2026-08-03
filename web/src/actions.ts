@@ -348,6 +348,17 @@ export function moveCard(guid: string, target: MoveTarget): void {
   // surprise teleport home; this is the backstop that makes it impossible.
   const zoneOwnerId = ownerOf(guid);
   const wasPublic = !!s.cards[guid] && !HIDDEN_ZONES.includes(s.cards[guid].zone);
+
+  // Tokens are battlefield-only (Archidekt behavior): moved anywhere else,
+  // they cease to exist instead of changing zone.
+  if (cur.zone === 'battlefield' && target.zone !== 'battlefield' && s.pool[guid]?.isToken) {
+    sendState([
+      cardEvent({ ...cur, del: true }),
+      logEvent({ kind: 'zone', text: `${cardName(s.pool, guid, cur.faceDown)} ceased to exist (token)` }),
+    ]);
+    return;
+  }
+
   const fromHidden = removeFromHidden(guid);
 
   const leavingBattlefield = cur.zone === 'battlefield' && target.zone !== 'battlefield';
@@ -592,12 +603,45 @@ export function createTokens(tokens: PoolCard[], at: { x: number; y: number }): 
   sendState(events);
 }
 
-/** Token copy of an existing card (C-7). */
+const TOKEN_FRAME: Record<string, string> = { W: 'white', U: 'blue', B: 'black', R: 'red', G: 'green' };
+
+/**
+ * Crucible CardData for a token copy of a real card: same name/type/text/P-T
+ * and the card's art crop, but drawn as a token face — so a copy is visibly
+ * a token, not a pixel-identical duplicate.
+ */
+function tokenDataFrom(src: PoolCard): Record<string, unknown> {
+  if (src.custom) return { ...src.custom };
+  const face = src.sf?.faces[0];
+  const type = face?.type ?? '';
+  const data: Record<string, unknown> = {
+    name: face?.name ?? src.sf?.name ?? 'Token',
+    typeLine: /\bToken\b/.test(type) ? type : `Token ${type || 'Copy'}`,
+    rarity: 'common',
+  };
+  if (face?.oracle) data.abilities = face.oracle;
+  if (face?.power != null && face?.toughness != null) {
+    data.power = face.power;
+    data.toughness = face.toughness;
+  }
+  if (face?.img) data.artUrl = face.img.replace('/normal/', '/art_crop/');
+  const colors = new Set<string>();
+  for (const m of (face?.mana ?? '').matchAll(/\{([^}]+)\}/g)) {
+    for (const ch of m[1].toUpperCase()) if (ch in TOKEN_FRAME) colors.add(ch);
+  }
+  if (colors.size) {
+    const frames = Object.keys(TOKEN_FRAME).filter((c) => colors.has(c)).map((c) => TOKEN_FRAME[c]);
+    data.typeLineColor = frames.length === 1 ? frames[0] : frames;
+  }
+  return data;
+}
+
+/** Token copy of an existing card (C-7), rendered as a crucible token face. */
 export function copyCardAsToken(guid: string, at: { x: number; y: number }): void {
   const { s, me } = ctx();
   const src = s.pool[guid];
   if (!src) return;
-  createTokens([{ ...src, guid: newGuid(), ownerId: me, isToken: true, commander: undefined }], at);
+  createTokens([{ guid: newGuid(), ownerId: me, isToken: true, custom: tokenDataFrom(src) }], at);
 }
 
 export function removeToken(guid: string): void {
