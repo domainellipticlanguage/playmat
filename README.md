@@ -1,9 +1,23 @@
+<p align="center">
+  <img src="web/public/logo.svg" alt="Playmat — five-card fan logo" width="220" />
+</p>
+
 # Playmat
 
 A shared virtual table for paper-style Magic: The Gathering. Load a deck, share a
 5-letter room code, and push cards around a table that syncs to everyone in the
 room. The table is dumb; the players are smart — no rules engine, no accounts,
 scale-to-zero AWS backend.
+
+Powered by [mtg-crucible](https://github.com/domainellipticlanguage/mtg-crucible):
+every card face on the table is crucible's `MtgCard` React component, custom
+tokens are drawn in-browser by its render engine on every client (only JSON goes
+over the wire), and flip/transform/battle orientations come from its
+`computeRotations`.
+
+<!-- Gameplay screenshot goes here so people know what to expect:
+![A Commander game in progress on Playmat](docs/screenshot.png)
+-->
 
 Requirements & design doc: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 
@@ -123,7 +137,7 @@ docs/          the original requirements/design doc
   be the first segment in AppSync Events; the doc's `/game/{code}/...` shape
   isn't possible).
 - **No private channel** — hidden info never leaves the owner's browser except
-  to the snapshot store (per your annotation).
+  to the snapshot store (deliberate; see §7.3 of the design doc).
 - **Deck pools are readable by peers' devtools** (the pool broadcast includes
   your decklist). Same trust model as §7.3; library *order* and hand contents
   are never broadcast.

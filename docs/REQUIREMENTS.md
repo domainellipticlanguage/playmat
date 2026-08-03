@@ -1,15 +1,15 @@
 # Playmat — Requirements
 
-**Status:** Draft
-**Last updated:** 2026-07-31
-
-So what follows is AI-generated, except where I (the human) have annotated with parentheses. And the final section for ### Other thoughts. The human decisions override any AI design doc choices.
+**Status:** Living document — originally drafted before implementation, since updated to fold in the decisions made along the way.
+**Last updated:** 2026-08-03
 
 ## 1. Overview
 
 Playmat is a shared virtual table for paper-style Magic: The Gathering. Players load a decklist, join a room with a short code, and manipulate cards on a shared surface that syncs to everyone in the room in near real time.
 
 Playmat does **not** implement the rules of Magic. It does not know what a legal play is, does not enforce priority or the stack, and does not check mana costs. It is the digital equivalent of a kitchen table: it holds cards where you put them, and the players sort out what is legal. This is a deliberate product decision, not a phase-one shortcut.
+
+Showcasing [mtg-crucible](https://www.npmjs.com/package/mtg-crucible)'s `MtgCard` React component is part of the project's purpose: every card face on the table is crucible-rendered.
 
 ### 1.1 Design principles
 
@@ -27,8 +27,8 @@ Playmat does **not** implement the rules of Magic. It does not know what a legal
 - Support the full set of Magic zones, including the command zone (Commander/PDH is the primary format).
 - Work in a browser with no install, no account, and no app store.
 - Cost under $5/month at hobby usage.
-- Spectator Mode
-- This is like a combination of the Archidekt/Moxfield playtester + a life tracking app on a phone where you can track life totals and commander damage (in particular, you can increment/decrement the commander damage total for a player, and it also ticks up/down on the life total. so you don't have to double track.)
+- Spectator mode: a full room still admits watchers.
+- Fold the phone-app life tracker into the table: life, commander damage, poison/energy/experience live on the same screen as the cards, and commander damage ticks the life total automatically — no double tracking.
 
 ### 2.2 Non-goals (v1)
 
@@ -36,7 +36,7 @@ Playmat does **not** implement the rules of Magic. It does not know what a legal
 - Deck legality checking (format, singleton, color identity).
 - Matchmaking, ladders, ratings, tournaments.
 - Chat, voice, video. Players are assumed to be on Discord or in the same room.
-- Mobile-first layout. Desktop/tablet is the target; phones are best-effort.
+- A native mobile app. (The browser app itself grew real phone support after v1 — see N-7; desktop remains the primary target.)
 - Persistence of a game across days. A room is a session.
 
 ## 3. Users and context
@@ -52,24 +52,24 @@ Playmat does **not** implement the rules of Magic. It does not know what a legal
 | ID | Requirement |
 |---|---|
 | R-1 | A player can create a room and receive a short code (4–6 characters, unambiguous alphabet — no `0`/`O`, `1`/`I`/`l`). |
-| R-2 | A player can join an existing room by entering its code and choosing a display name. |
-| R-3 | A room holds a maximum of 4 seated players. |
-| R-4 | Rooms expire automatically after 24 hours of inactivity. (I'm not married to this. I guess I don't want rooms disappearing too quickly) |
+| R-2 | A player can join an existing room by entering its code and choosing a display name. Code input accepts pasted invite URLs. |
+| R-3 | A room holds a maximum of 4 seated players; further joiners become spectators. |
+| R-4 | Rooms expire automatically after a day-plus of inactivity (TTL-driven; err toward keeping rooms longer rather than shorter). |
 | R-5 | Joining a room delivers a full snapshot of current board state before any live events are applied. |
 | R-6 | A player who disconnects and rejoins within the room's lifetime resumes their seat and their hidden zones. |
-| R-7 | No account, email, or password is required to create or join a room. |
+| R-7 | No account, email, or password is required to create or join a room. Display names persist in localStorage. |
 
 ### 4.2 Decks
 
 | ID | Requirement |
 |---|---|
 | D-1 | A player can import a deck by pasting a plain decklist (`1 Lightning Bolt` / `1x Lightning Bolt`, one per line, optional `// Commander` or `SB:` style section markers). |
-| D-2 | A player can import a deck from an Archidekt ~~or Moxfield URL~~ (Moxfield will block us). |
-| D-3 | Card names resolve to card data and images via Scryfall. Ambiguous or unresolvable names are surfaced to the player for correction; import is not blocked by a single bad line. |
-| D-4 | Double-faced, split, adventure, and flip cards resolve correctly and expose both faces. |
-| D-5 | A player can designate one or more cards as commanders, placing them in the command zone at game start. (Ideally this is inferred from the dekclist or the deck URL - I'm afraid of too many options / making this complicated. Definitely this is not SOP. Hmm I guess worst case scenario, the player uses the Search deck feature and drags the card into the command zone. So no special handling there...) |
-| D-6 | Resolved deck data is cached server-side so that re-importing a common decklist does not re-query Scryfall per card. (Ok let's talk about this later)|
-| D-7 | ~~Basic lands and tokens can be added to the board from a searchable picker without being in the decklist.~~ (basic lands should be in the decklist. For tokens, we should support the predefined types like Food, Treasure, Clue. But I guess custom tokens too where you can write arbitrary text on it. Or arbitrary creatures. in a later phase we can try to infer predefined creature tokens, etc. Archideckt might just support that out of the box...) |
+| D-2 | A player can import a deck from an Archidekt URL. (Moxfield blocks third-party fetches, so it is out.) An import that resolves cleanly becomes the chosen deck without a confirmation step. |
+| D-3 | Card names resolve to card data and images via Scryfall, client-side through `/cards/collection` (75 cards per request). Ambiguous or unresolvable names are surfaced to the player for correction; import is not blocked by a single bad line. |
+| D-4 | Double-faced, split, adventure, flip, and battle cards resolve correctly and expose all faces and rotations. |
+| D-5 | Commanders are inferred from the decklist or deck URL (`// Commander`, `*CMDR*`, Archidekt's Commander category), with a manual pick as fallback; they start in the command zone. |
+| D-6 | Resolved decks are saved in the browser (with their real deck names and commander art) for one-click re-use in later sessions. There is no server-side card cache; Scryfall resolution is cheap enough per import. |
+| D-7 | Basic lands belong in the decklist. Tokens do not: predefined quick picks (Food, Treasure, Clue, …), Scryfall token search, and fully custom tokens (arbitrary name, text, P/T) are all creatable at the table. Custom tokens are rendered by crucible on every client from synced JSON. Copying a card as a token produces a token-framed copy, and any token leaving the battlefield ceases to exist. |
 
 ### 4.3 Zones
 
@@ -81,48 +81,53 @@ Supported zones, per player: **library, hand, battlefield, graveyard, exile, com
 | Z-2 | Hand is unordered from other players' perspective and hidden from them; only the card count is public. Exception: teaching mode (C-13). |
 | Z-3 | Battlefield is a free-positioning surface. Each player has a nominal region, but cards may be placed anywhere (control changes, shared board effects). |
 | Z-4 | Graveyard and exile are ordered, public, and expandable to a full list view. |
-| Z-5 | Command zone is public and displays commander tax as a manual counter. |
+| Z-5 | Command zone is public and displays commander tax as a manual counter (doubling it gives the cost bump). |
 | Z-6 | A card only ever occupies **its own owner's** library, hand, graveyard, exile, and command zone. Milling or discarding another player's card puts it in *their* zone; nothing of yours can end up in their deck. The battlefield is the sole exception — `controllerId` lets you take control of an opponent's permanent. A drop onto another player's pile is refused rather than silently rerouted. |
 | Z-7 | Reordering a library (shuffle, scry, peek) stays with its owner: only the owner's client holds the authoritative array, so another player searching a library leaves the shuffle to them. |
 
-Throwing this out there: In terms of implementation, for private actions, we just don't publish an event.
+Private actions are private by construction: nothing about them is published at all, rather than published-and-hidden.
 
 ### 4.4 Card actions
 
 | ID | Requirement |
 |---|---|
 | C-1 | Drag a card to a new position on the battlefield. |
-| C-2 | Tap/untap a card (90° rotation); untap all as a single action. (this should work with multiselect) |
+| C-2 | Tap/untap a card (90° rotation), including a whole multi-selection at once; untap all as a single action. |
 | C-3 | Flip a card face-down (as a morph/manifest) and back. |
 | C-4 | Transform a double-faced card between its faces. |
-| C-5 | Add, remove, and set arbitrary named counters on a card (+1/+1, loyalty, charge, custom label). |
-| C-6 | ~~Attach a card to another card to represent an aura or equipment; attached cards move with their host.~~ (Hmm I'm not sure about this - I think maybe we should allow click and drag for an area select, then you can move things around in a group)|
-| C-7 | Create token copies of a card, or create a token by searching Scryfall's token set. |
+| C-5 | Add, remove, and set arbitrary named counters on a card (+1/+1, loyalty, charge, custom label). +1/+1 counters display the effective P/T. |
+| C-6 | No attach/host mechanic: multi-select and group drag (C-12) cover moving auras and equipment with their creature. |
+| C-7 | Create token copies of a card, or create a token by searching Scryfall's token set (see D-7). |
 | C-8 | Peek at the top N cards of a library (owner only — reordering is owner-only per Z-7), reorder them, and return them to the top or bottom — covering scry, surveil, and tutoring. |
 | C-9 | Shuffle a library (owner only, Z-7). |
 | C-10 | Reveal a card from a hidden zone to all players. |
-| C-11 | Move a card between any two zones via drag or a context menu, subject to Z-6. |
-| C-12 | Group-select multiple battlefield cards and move them together. |
+| C-11 | Move a card between any two zones via drag or a context menu, subject to Z-6. Right-click offers a context menu on every surface: cards, hand, piles, library, battlefield background. |
+| C-12 | Group-select multiple battlefield cards (shift+click) and move them together. |
 | C-13 | Teaching mode: a player may continuously reveal their hand to the table. While it is on, **other players may act on that hand** — play, discard, exile, or tuck a card on the owner's behalf. Every such move still resolves into the owner's own zones (Z-6). |
+| C-14 | Hovering a card shows a high-quality expanded preview for easy reading; suppressed while dragging so it never fights the interaction. |
 
 ### 4.5 Game state
 
 | ID | Requirement |
 |---|---|
 | G-1 | Each player has a life total, adjustable by ±1 and ±5, and directly editable. |
-| G-2 | Commander damage is tracked per opponent, per commander. |
+| G-2 | Commander damage is tracked per opponent, per commander, and ticks the life total. |
 | G-3 | Poison/energy/experience counters are tracked per player. |
-| G-4 | A shared die roller and coin flipper produce results visible to all players. (YESS!!! I'm tempted to animate this with threejs physics simulation? Talk me out of it man, talk me out of it...) |
-| G-5 | A turn indicator can be passed between players. It is decorative and enforces nothing. (although it should cause someone to untap, upkeep, draw...hmm I guess the player can do that themselves. I guess there should be a shortcut button for untap all, and maybe one for untap,upkeep,draw) |
-| G-6 | An untyped, per-room event log records significant actions (zone changes, life changes, shuffles, reveals) for dispute resolution. (I'll have more on this later...) |
-| G-7 | Any player can trigger "reset board" or "new game," which returns all cards to their owners' libraries and shuffles. (Hmmm definitely have a confirmation dialog though. At one point I was pondering if we need to designate an Admin player. Probably overkill right now.) |
+| G-4 | A shared die roller (d6/d20/dN) and coin flipper produce results visible to all players, with a synced animation. (CSS animation — a physics engine is not worth the dependency.) |
+| G-5 | A turn indicator is decorative and enforces nothing. Taking the turn is a free-for-all — any player may take it at any time, and there is deliberately no pass-the-turn button. A take-turn shortcut does untap-all + draw for whoever takes it. |
+| G-6 | An untyped, per-room event log records significant actions (zone changes, life changes, shuffles, reveals) for dispute resolution. |
+| G-7 | Any player can trigger "reset board" or "new game," behind a confirmation dialog. No admin role exists or is needed. |
 
 ### 4.6 Presence
 
 | ID | Requirement |
 |---|---|
-| P-1 | Each seated player's connection status (connected / reconnecting / gone) is visible to the room. |
+| P-1 | Each seated player's connection status (connected / reconnecting / gone) is visible in their tray. |
 | P-2 | Other players' cursors are visible on the battlefield while they are dragging. |
+
+### 4.7 Orientation
+
+Published coordinates use one fixed table-space convention. Each client applies its own per-seat view transform as a final display step, so every player sees their own cards nearest themselves. Per-card upright rotation is applied on a wrapper div — never through crucible's own rotation system, which stays reserved for card-intrinsic states (tap, transform, battles). A preference optionally counter-rotates opponents' cards so nobody reads upside down.
 
 ## 5. Architecture
 
@@ -131,41 +136,33 @@ Throwing this out there: In terms of implementation, for private actions, we jus
 | Component | Service | Notes |
 |---|---|---|
 | Frontend | S3 + CloudFront | Static React SPA. No SSR. |
+| Card rendering | mtg-crucible (browser build) | `MtgCard` for every face; `computeRotations` for flip/battle states; client-side `renderCard` for custom tokens. |
 | Realtime transport | AppSync Events API | WebSocket pub/sub, scale-to-zero. |
 | Auth | Lambda authorizer (`AWS_LAMBDA` mode) | Verifies room-scoped JWT. |
-| Room/session API | Lambda Function URL | Create room, join room, fetch snapshot, import deck. |
-| Rules/validation | *None in v1* | Reserved: a Lambda data source on a second namespace. (Uhh...not sure what this means. Don't make resources you don't need) |
-| State | DynamoDB | Rooms table, Board table, Card cache table. |
-| Card data | Scryfall API | External; cached in DynamoDB. |
-| User-Agent | Be curteous and set this. mtg-playmat/0.1 maybe? |
+| Room/session API | Lambda Function URL | Create room, join room, fetch snapshot. |
+| State | DynamoDB | Rooms table + Board table, both TTL-cleaned. |
+| Card data | Scryfall API | Client-side resolution; courteous User-Agent; respect rate limits. |
 
-**Region:** `us-east-1`.
+Two Lambdas total (room API, authorizer). **Region:** `us-east-1`.
 
 ### 5.2 Channel design
 
 | Namespace | Path | Handler | Persisted |
 |---|---|---|---|
-| `ephemeral` | `/game/{code}/ephemeral/*` | none | no |
-| `state` | `/game/{code}/state/*` | DynamoDB data source | yes |
-| `private` | `/game/{code}/private/{playerId}` | none | no |
+| `ephemeral` | `/ephemeral/{code}` | none | no |
+| `state` | `/state/{code}` | DynamoDB data source | yes |
 
-- **`ephemeral`** carries in-flight drag positions and cursor movement. No data source is attached, so no DynamoDB write and no Lambda invocation occurs per event. This is the highest-volume channel and must remain the cheapest.
-- **`state`** carries committed actions — drops, zone changes, taps, counters, life. Each publish persists to the Board table via an `onPublish` handler before fan-out.
-- **`private`** carries per-player hidden information (library peeks, opening hands). Subscription is authorized only for the matching `playerId`. See §7.3.
+The namespace must be the first path segment in AppSync Events, hence `/state/{code}` rather than a `/game/{code}/...` shape.
 
-(Human: So I don't see the point of a private channel. Why broadcast it all? handle it all client-side?
-Also I don't think we need to persist this info to DDB at all. Pretty sure this can all live in browsers. Yeah I think everything lives in localstorage.
-ephemeral - ok I do like having cursor movement. And drags. Let's rate limit it though and have the client smoohtly interpolate movement (there's probably something more sophisticated than linear interpolation we can do). Rate limiting is a native feature of appsync i think?
-Is it worth making the distinction between state and ephemeral? I mean in some sense, yes, but i mean, does this amount to 2 separate appsync channels? Or is it fine?
-)
+- **`ephemeral`** carries in-flight drag positions and cursor movement, throttled client-side (E-4) and smoothed by interpolation on receipt. No data source is attached, so no DynamoDB write and no Lambda invocation occurs per event. This is the highest-volume channel and must remain the cheapest.
+- **`state`** carries committed actions — drops, zone changes, taps, counters, life. Each publish persists to the Board table via an `onPublish` handler *before* fan-out, so reconnect is always "fetch snapshot, then apply live events," never event replay.
+- There is **no private channel.** Hidden information (library order, hand) lives in the owner's browser and localStorage, persisted server-side only inside the owner's snapshot for reconnect (R-6). Broadcasting-then-hiding was rejected outright.
 
 ### 5.3 Data model
 
 **Rooms table** — PK `roomCode`. Holds seat assignments, player display names, creation timestamp, and a TTL attribute for automatic expiry.
 
-**Board table** — PK `roomCode`, SK `cardId` for card items plus a `#meta` item for player-level state (life, counters, turn). Per-card items avoid contention when several players act at once and keep any single item well under the 400KB limit.
-
-**Card cache table** — PK `cardName` (normalized). Stores the Scryfall payload subset needed for rendering, with a long TTL. Populated on first import of a given card.
+**Board table** — PK `roomCode`, SK per subject (one item per card/player, 72h TTL). Per-subject items avoid contention when several players act at once and keep any single item well under the 400KB limit. "New game" mints a fresh `gameId` and old-epoch items simply fall out of snapshots — no mass deletes.
 
 ### 5.4 Event semantics
 
@@ -173,15 +170,17 @@ AppSync Events provides **at-most-once delivery and does not guarantee ordering*
 
 | ID | Requirement |
 |---|---|
-| E-1 | State events carry absolute values, never deltas. A card position event contains `{x, y}`, not `{dx, dy}`. A life event contains the resulting total, not the change. |
+| E-1 | State events carry absolute values, never deltas. A card position event contains `{x, y}`, not `{dx, dy}`. A life event contains the resulting total, not the change. Events are idempotent PUTs keyed by card guid (token deletion being the one DELETE). |
 | E-2 | Every state event carries a monotonically increasing sequence number scoped to its subject (card or player). |
-| E-3 | Clients discard any received event whose sequence number is less than or equal to the last seen value for that subject. |
-| E-4 | Drag events on the `ephemeral` channel are throttled client-side to at most 15/sec. (Oh I see. client-side throttling. I'd say even 8/sec. Well make it adjustable at any rate) |
+| E-3 | Clients discard any received event whose sequence number is less than or equal to the last seen value for that subject; ties break deterministically by publisher id. |
+| E-4 | Drag events on the `ephemeral` channel are throttled client-side — default 8/sec, adjustable in preferences. |
 | E-5 | A drag terminates with exactly one unthrottled event on the `state` channel, which is the authoritative commit. |
-| E-6 | On WebSocket reconnect, the client re-fetches a full snapshot rather than attempting to replay missed events. (Hmm ok that would explain why we would need DDB i suppose...) |
+| E-6 | On WebSocket reconnect, the client re-fetches a full snapshot rather than attempting to replay missed events. |
 | E-7 | The dragging client renders its own card movement locally and immediately, without waiting for the echo. |
 
 E-1 through E-3 together mean a dropped or reordered event is corrected by the next event for that subject rather than corrupting state. E-5 ensures the one event that must land is not the one thrown away by throttling.
+
+Every physical card gets a guid at import — 27 Forests produce 27 guids. The resolved pool (guid → card data) is broadcast once and persisted; afterwards all events refer to guids only, keeping per-event bandwidth small. A deck re-import mints an `importId` that atomically replaces the player's pool.
 
 ## 6. Non-functional requirements
 
@@ -192,19 +191,20 @@ E-1 through E-3 together mean a dropped or reordered event is corrected by the n
 | N-3 | Cold start on room creation is under 3 seconds. |
 | N-4 | A room survives any single player's disconnect without state loss. |
 | N-5 | Supported browsers: current Chrome, Firefox, Safari, Edge. |
-| N-6 | Scryfall usage must respect their rate limits and caching guidance; images must not be hot-linked at high volume. **Verify current policy before implementation.** |
+| N-6 | Scryfall usage must respect their rate limits and caching guidance; images must not be hot-linked at high volume. |
+| N-7 | **Desktop/mobile parity for interactions.** Anything draggable with a mouse is draggable by touch — one Pointer-Events code path, with `touch-action: none` on every drag surface so the browser never claims the gesture. The layout fits a phone viewport exactly (no page scroll in either axis); trays collapse to stat lines and the hand takes the full bottom edge. |
 
 ## 7. Security
 
 ### 7.1 Authorization model
 
-1. A player calls the Room Lambda with a room code and display name. (we should persist the display name in Localstorage)
-2. The Lambda validates the room exists and has a free seat, then mints a JWT containing `{roomCode, playerId, seat}`, signed with a key held in Secrets Manager. (Hmmm i don't love maintaining a secret. Is there another option? Maybe if the room is full, the new player just joins as a spectator? Idk I think we're overthinking this jwt thing...although this whole thing is a vanity project anyway, so might as well go full hog?)
+1. A player calls the Room Lambda with a room code and display name.
+2. The Lambda validates the room exists, then mints a JWT containing `{roomCode, playerId, seat}` (seat `null` for spectators when the room is full). The HS256 signing key is generated at first synth and kept with the stack — no Secrets Manager; this is a trust-based hobby deployment, and the key never enters the repo or the bundle.
 3. The client connects to AppSync Events with that JWT.
-4. The Lambda authorizer verifies the signature and confirms the requested channel path begins with `/game/{roomCode-from-claims}`. It returns `isAuthorized` plus `handlerContext: {playerId, roomCode}`. (how many lambdas do we have?)
-5. Handlers read `$ctx.identity.handlerContext.playerId` to attribute events.
+4. The Lambda authorizer verifies the signature and confirms the requested channel path belongs to the room in the claims. It returns `isAuthorized` plus `handlerContext: {playerId, roomCode}`.
+5. Handlers read the handler context to attribute events.
 
-**Channel-path authorization is not declarative in AppSync Events.** Granting subscribe on `/game/*` grants it on every room. Scoping to a single room must be checked explicitly in the authorizer.
+**Channel-path authorization is not declarative in AppSync Events.** Granting subscribe on a wildcard grants it on every room; scoping to a single room must be checked explicitly in the authorizer.
 
 ### 7.2 Requirements
 
@@ -214,7 +214,7 @@ E-1 through E-3 together mean a dropped or reordered event is corrected by the n
 | S-2 | A room token grants access to exactly one room and expires with that room. |
 | S-3 | A player may only publish events attributed to their own `playerId`. |
 | S-4 | Display names are sanitized before rendering (XSS). |
-| S-5 | Room creation is rate-limited per source IP. (What form will this take? Is this an out of the box feature?) |
+| S-5 | Room creation is rate-limited per source IP. |
 
 ### 7.3 Hidden information — accepted limitation
 
@@ -226,54 +226,10 @@ It does **not** prevent a determined cheat, and after the Z-1 change it does not
 
 This is consistent with §1.1.3: Playmat is for playing with people you know, and offers exactly the protection a physical table does, which is to say the protection of not wanting to cheat. Any product decision to serve strangers requires revisiting this.
 
-(As i said, i don't think it makes sense to have a private channel)
-
 ## 8. Deployment
 
-### 8.1 Stacks
+Single CDK stack (`Playmat`) containing AppSync, both Lambdas, both DynamoDB tables, the S3 bucket, and the CloudFront distribution. `scripts/deploy.mjs` runs the whole pipeline: CDK deploy → fresh web build with the stack's real endpoints injected → S3 sync → CloudFront invalidation. No custom domain yet.
 
-Single CDK stack for v1, containing AppSync, both Lambdas, all DynamoDB tables, the S3 bucket, and the CloudFront distribution.
+## 9. Presentation
 
-(Ignore this next section, we're gonna one-shot it)
-~~~
-## 9. Milestones
-
-| Milestone | Contents |
-|---|---|
-| **M1 — Sync spike** | Two browsers, one room, colored rectangles draggable and synced. No cards, no auth, API key only. Validates transport, cost model, and cross-country latency. |
-| **M2 — Cards** | Decklist paste, Scryfall resolution, card rendering, library/hand/battlefield, draw, play, tap. |
-| **M3 — Full table** | All zones, counters, tokens, life, commander damage, event log. |
-| **M4 — Rooms and auth** | Room codes, JWT authorizer, private channels, reconnect and snapshot recovery, TTL cleanup. |
-| **M5 — Polish** | Deckbuilder URL import, group select, attachments, die roller, presence cursors. |
-
-M1 exists to fail cheaply. If AppSync latency or cost behaves unexpectedly across that distance, the transport decision should change before any Magic-specific work is built on top of it.
-~~~
-
-### Other thoughts
-Ok so here are my thoughts. When the decklist is first imported, each card gets assigned a guid (in particular, 27 forests causes 27 different guids). Then when we shuffle a deck (library) we shuffle the guids. When someone takes a card from their library to the battlefield, we publish an event {guid:'...', action:...}
-
-I'm thinking events are sorta like PUT /{guid} $state
-So $state could be moving to a certain zone, or dragging, flipping, or whatever. The idea is idempotence.
-
-I guess some operations would be like DELETE /{guid} - that would be the case for tokens. So you can also PUT to make a token.
-
-Anyway, the decklist resolves to a list of CardData objects (more on that later), each assigned a guid. This is a nice immutable thing, so we broadcast it to all players. Then we can just refer to cards by guid for the rest of the game to keep bandwidth usage low. Also we should save the decklist to localhost...? Idk I'm thinking just that i kinda want to be able to come back another time and it remembers the deck I used before.
-
-We want to use [mtg-crucible](https://www.npmjs.com/package/mtg-crucible) for displaying cards. It is a rendering engine (like render to png), but we want to use it for the React component it has for rendering to HTML (this is kinda the whole justification for this project...). Speaking of which, our SPA must be React. That will work with Cloudfront CDN right? Anyway, crucible has a browser build which I think we should use for this. It also has a CardData data structure. We can massage the scryfall card definition data to this format. Although we might actually want the RenderedCardInfo thingy which I think wraps CardData. But anyway, that is how you use the MtgCard react component. Crucible also will compute rotations for flip cards and battles (TODO verify this is a standalone function, and we don't have to call the renderCard function in order to receive the rotations). MtgCard renders a nice little spinner you can push to rotate the card. One edge case - crucible will always insert the null rotation as the first thing in the rotation array. For battles we probably want to strip this out - we want them to be turned sideways by default.
-
-
-Emulate basically all the functionality in the Archidekt playtester. Like peak library, play with top revealed, search library, etc. Also it has a cool thing where if you add +1/+1 counters to a creature, it will calculate the effective P/T for you. We should be able to do that since we will have P/T from CardData (with some edge cases where it's */* instead of numeric. But what can you do?)
-
-So there is sort of a tension where the Playmat view I see is different from what another player sees. Because obviously you want your own cards right in front of you. We resolve this by defining a fixed coordinate system that favors player one, and all published events use this convention, and then when we display on the client, we apply a rotation/transformation/otherwise affine thing as the last step to put your cards in front of you. I guess it's still weird since on top of this global transformation, we want to rotate just your own cards so they are facing you. I think we should wrap each MtgCard component in a <div> and apply a rotation to the div. We don't want to interfere with Crucible's native rotation system. I am also thinking maybe you should set a preference where opponent's cards are also rotated to match your orientation so you don't have to read upside down.
-
-Regardless, I'm thinking there should be a feature to hover your mouse over a card and it produces a high quality, expanded version of the card for easy reading. Not sure how to make that not annoying and constantly misfiring.
-
-Scryfall api looksup - ok so we should use scryfall images to stick into the MtgCard component for the img urls. I don't think there is any problem with that. To get that though, I think we have to look up the cards via the api. And as mentioned before, they want a courtesy of 10/second.
-
-Looks like there is a bulk download. We should save this to s3 and decompress it. I guess our lambda could read the whole 200mb uncompressed thing, and resolve the decklists? I wonder how fast it would be. It would bloat our lambda memory reqs considerably. I really don't want to load this into memcached or something though of course. Another idea I had - maybe build an index mapping card-name to byte-range of the big file (since it's jsonl) and then use s3 byte indexes? Although that's 100 s3 lookups, ick. Our best bet might be to just hammer scryfall with the on demand api. 10 seconds for a deck ain't so bad?
-https://scryfall.com/docs/api/bulk-data/
-https://data.scryfall.io/oracle-cards/oracle-cards-20260731210300.jsonl.gz
-
-Bells and whistles - I think the background image for this kitchen table thing could be cool. Archideckt has a pretty mundane black background with little gridlines. We could try to do a funny Medieval/fantasy hewn stone kitchen table surface. Could also make it respect the North/South/East/West orientations as an extra flourish. Check /Users/nathandunn/Projects/big-bad-wolf-trailer/.env for a REPLICATE_API_KEY you can use for generating images.
-
-No need for a custom domain name yet.
+The table itself is part of the product: a generated wood table surface (`scripts/gen-art.mjs`), per-seat playmat regions in each player's color (or their commander's art, or a custom image), and a charcoal-and-gold UI. Player colors are deliberately non-mana colors so they never read as a mana identity.
