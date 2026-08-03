@@ -8,6 +8,7 @@ import {
   Stack,
   type StackProps,
   aws_appsync as appsync,
+  aws_certificatemanager as acm,
   aws_cloudfront as cloudfront,
   aws_cloudfront_origins as origins,
   aws_dynamodb as dynamodb,
@@ -147,7 +148,21 @@ export class PlaymatStack extends Stack {
       autoDeleteObjects: true,
     });
 
+    // Custom domain. DNS for domainellipticlanguage.com lives on Cloudflare
+    // (same convention as the primary site): a DNS-only CNAME points
+    // playmat.domainellipticlanguage.com at this distribution, and the ACM
+    // cert below was DNS-validated the same way. Hardcoded — not env-gated —
+    // so a routine deploy can never silently detach the domain.
+    const domainName = 'playmat.domainellipticlanguage.com';
+    const certificate = acm.Certificate.fromCertificateArn(
+      this,
+      'Cert',
+      'arn:aws:acm:us-east-1:367546079126:certificate/38233899-e9f1-459e-881a-9285c167167b'
+    );
+
     const distribution = new cloudfront.Distribution(this, 'Cdn', {
+      domainNames: [domainName],
+      certificate,
       defaultBehavior: {
         origin: origins.S3BucketOrigin.withOriginAccessControl(webBucket),
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -170,6 +185,7 @@ export class PlaymatStack extends Stack {
     new CfnOutput(this, 'EventsRealtime', { value: `wss://${api.realtimeDns}/event/realtime` });
     new CfnOutput(this, 'WebBucket', { value: webBucket.bucketName });
     new CfnOutput(this, 'DistributionId', { value: distribution.distributionId });
-    new CfnOutput(this, 'WebUrl', { value: `https://${distribution.distributionDomainName}` });
+    new CfnOutput(this, 'WebUrl', { value: `https://${domainName}` });
+    new CfnOutput(this, 'CdnDomain', { value: distribution.distributionDomainName });
   }
 }
