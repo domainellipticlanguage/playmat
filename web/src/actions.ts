@@ -289,8 +289,19 @@ export function autoPlayPosition(guid: string): { x: number; y: number } {
   for (const p of slots) {
     if (!taken(p.x, p.y)) return p;
   }
-  // Row full: pile onto the last slot with a visible offset.
+  // Row full: stagger diagonally past the last slot, one step per card, as
+  // deep as it takes — every buried card keeps a readable corner. Needs its
+  // own tight occupancy check: the 40×30 step is deliberately smaller than a
+  // card, so `taken`'s card-sized tolerance would skip spots that are open.
   const last = slots[slots.length - 1];
+  const near = (x: number, y: number) =>
+    Object.values(s.cards).some(
+      (c) => c.zone === 'battlefield' && Math.abs(c.x - x) < 20 && Math.abs(c.y - y) < 20
+    );
+  for (let i = 1; i < 60; i++) {
+    const p = { x: last.x + 40 * i, y: last.y + 30 * i };
+    if (!near(p.x, p.y)) return p;
+  }
   return { x: last.x + 40, y: last.y + 30 };
 }
 
