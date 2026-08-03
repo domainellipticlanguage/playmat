@@ -11,22 +11,6 @@ import { ModalHost } from './Modals';
 import { ContextMenuHost } from './ContextMenu';
 import { DiceOverlay, HoverPreview, LogPanel } from './Panels';
 import { TABLE, liveView, screenToWorld } from '../view';
-import { LinkIcon } from './icons';
-import type { TransportStatus } from '../transport';
-
-/** Link / link-slash glyph for the topbar: linked to the room, or not. */
-function ConnIcon({ status }: { status: TransportStatus }) {
-  const label =
-    status === 'connected' ? 'Connected' :
-    status === 'reconnecting' ? 'Reconnecting…' :
-    status === 'connecting' ? 'Connecting…' :
-    'Disconnected';
-  return (
-    <span className={`conn-icon ${status}`} title={label} aria-label={label} role="img">
-      <LinkIcon slashed={status !== 'connected'} />
-    </span>
-  );
-}
 
 function centerDropSpot() {
   const w = screenToWorld(liveView.current, window.innerWidth / 2, window.innerHeight / 2);
@@ -36,7 +20,6 @@ function centerDropSpot() {
 export function Table() {
   const session = useGame((s) => s.session);
   const players = useGame((s) => s.players);
-  const connStatus = useGame((s) => s.connStatus);
   const synced = useGame((s) => s.synced);
   const room = useGame((s) => s.room);
   const pool = useGame((s) => s.pool);
@@ -160,7 +143,6 @@ export function Table() {
           <span className="code" title="Click to copy invite link" onClick={copyInvite}>
             {session.roomCode} {copied && <span style={{ fontSize: 11 }}>copied!</span>}
           </span>
-          <ConnIcon status={connStatus} />
           {(room?.turn ?? 0) > 0 && (
             <span
               className="turn-count"

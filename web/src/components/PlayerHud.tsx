@@ -115,8 +115,28 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
     topRevealed: null,
   };
 
-  const lastSeen = presence[pid] ?? (isMe ? Date.now() : 0);
-  const presenceClass = isMe || Date.now() - lastSeen < 25_000 ? 'connected' : lastSeen ? 'away' : '';
+  // My own row shows the REAL transport status — it's the only connectivity
+  // indicator (the topbar one was redundant). Peers go by their heartbeat.
+  const connStatus = useGame((s) => s.connStatus);
+  const lastSeen = presence[pid] ?? 0;
+  const presenceClass = isMe
+    ? connStatus === 'connected'
+      ? 'connected'
+      : connStatus === 'connecting' || connStatus === 'reconnecting'
+        ? 'away'
+        : 'dead'
+    : Date.now() - lastSeen < 25_000
+      ? 'connected'
+      : lastSeen
+        ? 'away'
+        : '';
+  const presenceTitle = isMe
+    ? connStatus === 'connecting' || connStatus === 'reconnecting'
+      ? `${connStatus}…`
+      : connStatus === 'connected'
+        ? 'connected'
+        : 'disconnected'
+    : presenceClass || 'not seen yet';
 
   const pileDrag = usePileDrag();
 
@@ -277,7 +297,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           ▸
         </button>
         <div className="hud-mini">
-          <span className={`presence ${presenceClass}`} title={presenceClass || 'not seen yet'}>
+          <span className={`presence ${presenceClass}`} title={presenceTitle}>
             <LinkIcon slashed={presenceClass !== 'connected'} size={12} />
           </span>
           <span className="player-chip" style={{ background: paletteColor(state.color, player.seat).hex }} />
@@ -298,7 +318,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
       </button>
       <div className="who">
         <div className="name">
-          <span className={`presence ${presenceClass}`} title={presenceClass || 'not seen yet'}>
+          <span className={`presence ${presenceClass}`} title={presenceTitle}>
             <LinkIcon slashed={presenceClass !== 'connected'} size={12} />
           </span>
           <span

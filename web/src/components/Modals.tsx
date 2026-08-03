@@ -527,10 +527,18 @@ function ImportModal({ onClose }: { onClose: () => void }) {
       setDeckName(deck.name);
       setStatus(`Resolving ${deck.entries.length} cards via Scryfall…`);
       const { cards, notFound } = await resolveByIds(deck.entries, me);
+      persisted.patch({ archidektUrl: url, decklistText: listText });
+      // A clean fetch IS choosing the deck — no extra confirm click. Only an
+      // imperfect resolve drops to the review flow below.
+      if (notFound.length === 0 && cards.length > 0) {
+        persisted.saveDeck(deck.name, cards);
+        actions.importDeck(cards);
+        onClose();
+        return;
+      }
       setProblems(notFound.map((n) => `unresolved id: ${n}`));
       setPending(cards);
       setStatus(`"${deck.name}" — ${cards.length} cards ready (decklist shown below; edit + Resolve to override).`);
-      persisted.patch({ archidektUrl: url, decklistText: listText });
     } catch (err) {
       setStatus(null);
       setProblems([String((err as Error).message ?? err)]);
@@ -762,6 +770,11 @@ function OpeningHandModal({ onClose }: { onClose: () => void }) {
         })}
       </div>
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
+        {/* Escape hatch: wrong deck entirely. Swapping re-deals and reopens
+            this modal for the new hand. */}
+        <button style={{ marginRight: 'auto' }} onClick={() => useUI.getState().openModal({ kind: 'import' })}>
+          Change deck
+        </button>
         <span className="subtle">
           {library.length} in library
           {nBottom > 0 && ` · bottoming ${nBottom}`}
