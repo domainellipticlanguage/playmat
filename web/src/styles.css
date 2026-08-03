@@ -151,6 +151,19 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   /* No iOS long-press image callout on card art mid-drag. */
   -webkit-touch-callout: none;
 }
+/* Every drag surface shares one contract: Pointer Events for mouse AND touch,
+   with the browser barred from claiming the gesture for scrolling. Without
+   touch-action:none a touch drag dies in pointercancel — desktop keeps working
+   while mobile silently doesn't. data-drop marks every zone that takes part in
+   dragging, so new zones inherit this automatically instead of rediscovering
+   the inconsistency one surface at a time. */
+[data-drop] {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
 .table-surface {
   position: absolute;
@@ -670,8 +683,11 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   .help-hint { display: none; }
 }
 
-/* Phones: trays start collapsed (PlayerHud), so the hand can take the full
-   width — the collapsed tray rides above it (z 26) and stays tappable. */
+/* Phones: trays start collapsed (PlayerHud) and the hand owns the full width
+   of the bottom edge. My tray (pos-bottom) stacks ABOVE the hand strip —
+   compact hand cards show ~95px above the bottom — so expanding it never
+   buries the hand and the hand never buries the piles. */
 @media (max-width: 700px) {
   .hand-strip { left: 8px; right: 8px; }
+  .hud.pos-bottom { bottom: 104px; }
 }
