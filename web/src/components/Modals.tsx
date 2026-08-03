@@ -846,16 +846,9 @@ function PrefsModal({ onClose }: { onClose: () => void }) {
           value={matChoice}
           onChange={(e) => {
             const v = e.target.value;
-            if (v === 'url') {
-              const url = prompt(
-                'Image URL for your playmat:',
-                prefs.playmatStyle?.startsWith('url:') ? prefs.playmatStyle.slice(4) : 'https://'
-              );
-              if (!url || !/^https?:\/\//.test(url)) return;
-              setPrefs({ playmatStyle: `url:${url}` });
-            } else {
-              setPrefs({ playmatStyle: v });
-            }
+            // The saved URL survives style switches, so coming back to
+            // "custom" restores the last mat instead of asking again.
+            setPrefs({ playmatStyle: v === 'url' ? `url:${prefs.playmatUrl ?? ''}` : v });
             publishIdentity();
           }}
         >
@@ -866,6 +859,19 @@ function PrefsModal({ onClose }: { onClose: () => void }) {
           <option value="url">Custom image URL…</option>
         </select>
       </label>
+      {matChoice === 'url' && (
+        <input
+          autoFocus={!prefs.playmatUrl}
+          placeholder="https://… (image URL for your playmat)"
+          value={prefs.playmatUrl ?? (prefs.playmatStyle?.startsWith('url:') ? prefs.playmatStyle.slice(4) : '')}
+          onChange={(e) => {
+            const u = e.target.value;
+            setPrefs({ playmatUrl: u, playmatStyle: `url:${u}` });
+          }}
+          onBlur={publishIdentity}
+          onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
+        />
+      )}
       <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
           type="checkbox"

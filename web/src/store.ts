@@ -38,6 +38,8 @@ export interface Prefs {
   playerColor?: string;
   /** My playmat background: 'color' | 'commander' | 'url:…'. Unset = 'color'. */
   playmatStyle?: string;
+  /** Last custom playmat URL — kept even while another style is active. */
+  playmatUrl?: string;
 }
 
 export interface RemoteCursor {
