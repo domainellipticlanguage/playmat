@@ -408,6 +408,18 @@ export function playFromHand(guid: string, x: number, y: number, faceDown = fals
   moveCard(guid, { zone: 'battlefield', x, y, faceDown });
 }
 
+/** Mill: top N of my library into my graveyard, with one log line. */
+export function millCards(n: number): void {
+  const { s, myName } = ctx();
+  const take = s.hidden.library.slice(0, n);
+  for (const guid of take) moveCard(guid, { zone: 'graveyard' });
+  if (take.length) {
+    sendState([
+      logEvent({ kind: 'zone', text: `${myName} milled ${take.length} card${take.length > 1 ? 's' : ''}` }),
+    ]);
+  }
+}
+
 /** Reorder my hand locally — order is private, so nothing is published. */
 export function reorderHand(guid: string, toIndex: number): void {
   const { s } = ctx();

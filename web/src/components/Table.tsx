@@ -38,6 +38,7 @@ export function Table() {
       if (useUI.getState().modal.kind !== 'none') return;
       if (spectator) return;
       if (e.key === 'd' || e.key === 'D') actions.drawCards(1);
+      else if (e.key === 'm' || e.key === 'M') actions.millCards(1);
       else if (e.key === 'u' || e.key === 'U') actions.untapAll();
       else if (e.key === 't' || e.key === 'T') {
         const sel = useGame.getState().selection;

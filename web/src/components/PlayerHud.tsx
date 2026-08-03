@@ -231,6 +231,15 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
               if (top) actions.moveCard(top, { zone: 'graveyard' });
             },
           },
+          {
+            label: 'Mill X…',
+            action: () => {
+              const n = Number(prompt(`Mill how many of ${player.name}'s cards?`, '3'));
+              for (const guid of (state.library ?? []).slice(0, n > 0 ? n : 0)) {
+                actions.moveCard(guid, { zone: 'graveyard' });
+              }
+            },
+          },
         ],
       });
       return;
@@ -249,9 +258,10 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
             if (n > 0) ui.openModal({ kind: 'peek', count: n, mode: 'scry' });
           } },
         { label: 'Search library', action: () => ui.openModal({ kind: 'search' }) },
-        { label: 'Mill 1', action: () => {
-            const top = useGame.getState().hidden.library[0];
-            if (top) actions.moveCard(top, { zone: 'graveyard' });
+        { label: 'Mill 1  (M)', action: () => actions.millCards(1) },
+        { label: 'Mill X…', action: () => {
+            const n = Number(prompt('Mill how many cards?', '3'));
+            if (n > 0) actions.millCards(n);
           } },
         { sep: true, label: '' },
         { label: state.topRevealed ? 'Stop playing with top revealed' : 'Play with top revealed',
