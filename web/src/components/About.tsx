@@ -2,6 +2,8 @@
  * The #about page. Hash-routed from the lobby (see App), so the browser's
  * back arrow returns there and the URL is bookmarkable.
  */
+const CRUCIBLE_NPM = 'https://www.npmjs.com/package/mtg-crucible';
+
 export function About() {
   return (
     <div className="lobby about">
@@ -19,16 +21,22 @@ export function About() {
         </p>
 
         <div className="credit">
-          <img src="/crucible.svg" alt="mtg-crucible logo" />
+          <a className="credit-logo" href={CRUCIBLE_NPM} target="_blank" rel="noreferrer">
+            <img src="/crucible.svg" alt="mtg-crucible logo" />
+          </a>
           <div>
-            <h2>mtg-crucible</h2>
+            <h2>
+              <a href={CRUCIBLE_NPM} target="_blank" rel="noreferrer">
+                mtg-crucible
+              </a>
+            </h2>
             <div className="credit-tag">The card renderer that powers this table</div>
             <p>
               An open-source TypeScript library for rendering Magic: The Gathering cards. Every
               face on this table is its <code>MtgCard</code> component, custom tokens are drawn
-              in-browser by its render engine on every client (only JSON crosses the wire), and
-              flip, transform, and battle orientations come from its <code>computeRotations</code>.
-              Try the renderer on its own at the{' '}
+              in-browser by its render engine on every client, and flip, transform, and battle
+              orientations come from its <code>computeRotations</code>. Try the renderer on its own
+              at the{' '}
               <a href="https://domainellipticlanguage.com/project/mtg-crucible-playground/" target="_blank" rel="noreferrer">
                 playground
               </a>
@@ -43,7 +51,7 @@ export function About() {
               </span>
               <span>
                 npm:{' '}
-                <a href="https://www.npmjs.com/package/mtg-crucible" target="_blank" rel="noreferrer">
+                <a href={CRUCIBLE_NPM} target="_blank" rel="noreferrer">
                   mtg-crucible
                 </a>
               </span>
@@ -65,7 +73,8 @@ export function About() {
           <a href="https://github.com/domainellipticlanguage/playmat" target="_blank" rel="noreferrer">
             github.com/domainellipticlanguage/playmat
           </a>
-          , design doc included.
+          . Bugs, questions, and feature requests are welcome at{' '}
+          <a href="mailto:domainellipticlanguage@gmail.com">domainellipticlanguage@gmail.com</a>.
         </p>
         <div className="row">
           <a className="back" href="#">

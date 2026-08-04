@@ -13,13 +13,11 @@ scale-to-zero AWS backend.
 
 Powered by [mtg-crucible](https://github.com/domainellipticlanguage/mtg-crucible):
 every card face on the table is crucible's `MtgCard` React component, custom
-tokens are drawn in-browser by its render engine on every client (only JSON goes
-over the wire), and flip/transform/battle orientations come from its
-`computeRotations`.
+tokens are drawn in-browser by its render engine on every client, and
+flip/transform/battle orientations come from its `computeRotations`.
 
 ![A Commander game in progress on Playmat](docs/screenshot.jpg)
 
-Requirements & design doc: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 
 ## Quick start (local, no AWS)
 
@@ -73,7 +71,7 @@ The JWT signing key is generated on first synth into `infra/.jwt-key`
 - Hidden zones (library order, hand) live in the owner's browser + localStorage,
   persisted server-side only for reconnect, and delivered only in the owner's
   snapshot. Nothing about peeks/scries is broadcast. Shuffles happen client-side
-  (trust-based, per the design doc).
+  (trust-based, per the requirements doc).
 - "New game" mints a fresh `gameId`; board items from old epochs are filtered
   out of snapshots and client state (no mass deletes needed). Deck re-imports
   mint an `importId` that atomically replaces the player's pool.
@@ -133,7 +131,7 @@ local-server/  dev backend: room API + AppSync Events wire-protocol emulation
 infra/         CDK stack, Lambdas (room API, authorizer), APPSYNC_JS handlers
 scripts/       deploy.mjs, smoke-aws.mjs, gen-art.mjs (Replicate art)
 art/           logo candidates + generated table art
-docs/          the original requirements/design doc
+docs/          the original requirements doc
 ```
 
 ## Notable deviations & accepted limitations
@@ -142,7 +140,7 @@ docs/          the original requirements/design doc
   be the first segment in AppSync Events; the doc's `/game/{code}/...` shape
   isn't possible).
 - **No private channel** — hidden info never leaves the owner's browser except
-  to the snapshot store (deliberate; see §7.3 of the design doc).
+  to the snapshot store (deliberate; see §7.3 of the requirements doc).
 - **Deck pools are readable by peers' devtools** (the pool broadcast includes
   your decklist). Same trust model as §7.3; library *order* and hand contents
   are never broadcast.

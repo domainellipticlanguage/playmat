@@ -118,7 +118,9 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   margin: 12px 0;
   flex-wrap: wrap;
 }
-.about .credit > img { width: 72px; flex-shrink: 0; margin-top: 4px; }
+.about .credit-logo { width: 72px; flex-shrink: 0; margin-top: 4px; display: block; }
+.about .credit-logo img { width: 100%; display: block; }
+.about .credit-logo:hover img { filter: drop-shadow(0 0 8px var(--accent-soft)); }
 .about .credit > div { flex: 1; min-width: 220px; }
 .about .credit h2 {
   margin: 0;
@@ -128,6 +130,7 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   text-transform: uppercase;
   letter-spacing: 2px;
 }
+.about .credit h2 a { color: inherit; }
 .about .credit-tag { color: var(--ink-dim); font-size: 13px; margin-bottom: 2px; }
 .about .credit-links { display: flex; gap: 22px; flex-wrap: wrap; font-size: 14px; }
 .about .credit-links span { color: var(--ink-dim); }
