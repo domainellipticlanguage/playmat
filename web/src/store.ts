@@ -24,6 +24,9 @@ import type { TransportStatus } from './transport';
 export interface Prefs {
   /** Rotate opponents' battlefield cards to face you (readability). */
   faceOpponentCards: boolean;
+  /** Mouse left-drag on empty felt pans (marquee moves to shift+drag)
+   * instead of the default marquee-select (pan via space/alt/middle). */
+  dragPansTable: boolean;
   /** Ephemeral publish rate for cursor/drag, events per second (E-4). */
   cursorRate: number;
   /** Broadcast my cursor position to the table (P-2). Off by default —
@@ -103,6 +106,7 @@ interface GameStore {
 
 const DEFAULT_PREFS: Prefs = {
   faceOpponentCards: false,
+  dragPansTable: false,
   cursorRate: 8,
   shareCursor: false,
   hoverPreview: true,

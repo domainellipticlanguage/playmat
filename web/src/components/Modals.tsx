@@ -883,6 +883,14 @@ function PrefsModal({ onClose }: { onClose: () => void }) {
       <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
           type="checkbox"
+          checked={prefs.dragPansTable}
+          onChange={(e) => setPrefs({ dragPansTable: e.target.checked })}
+        />
+        Dragging the table pans instead of selecting (marquee moves to shift+drag)
+      </label>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input
+          type="checkbox"
           checked={prefs.showHandToTable}
           onChange={(e) => actions.setShowHandToTable(e.target.checked)}
         />

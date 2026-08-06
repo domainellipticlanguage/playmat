@@ -17,6 +17,7 @@ import {
   screenToWorld,
   seatAngle,
   viewRotation,
+  worldToScreen,
   type MatRect,
   type ViewTransform,
 } from '../view';
@@ -86,15 +87,26 @@ interface DragState {
 }
 
 /**
- * View gesture in progress. One pointer on the background pans (mouse drag
- * or one finger); a second touch upgrades the pan to a pinch, which zooms
- * by the finger-distance ratio AND pans by the midpoint's travel — so two
- * fingers moving together is also a pan, Figma-style. Everything speaks
- * Pointer Events, so mouse/touch/pen share one code path.
+ * View gesture in progress. A mouse left-drag on the background draws a
+ * marquee (the Figma/TTS convention); panning belongs to space/alt/middle
+ * drag. One finger on the background pans; a second touch upgrades the pan
+ * to a pinch, which zooms by the finger-distance ratio AND pans by the
+ * midpoint's travel — so two fingers moving together is also a pan,
+ * Figma-style. A touch held still on the background "arms" (FigJam's
+ * long-press): dragging then draws the marquee, releasing opens the table
+ * menu — which is also the only way iOS can reach it, since iOS never fires
+ * contextmenu for touch. Everything speaks Pointer Events, so mouse/touch/
+ * pen share one code path.
  */
 type ViewGesture =
   | { mode: 'pan'; pointerId: number; startX: number; startY: number; cx: number; cy: number }
-  | { mode: 'pinch'; ids: [number, number]; m0: { x: number; y: number }; d0: number; view0: ViewTransform };
+  | { mode: 'pinch'; ids: [number, number]; m0: { x: number; y: number }; d0: number; view0: ViewTransform }
+  | { mode: 'armed'; pointerId: number; origin: { x: number; y: number } }
+  | { mode: 'marquee'; pointerId: number; origin: { x: number; y: number }; additive: boolean; base: string[] };
+
+const LONG_PRESS_MS = 500;
+/** A press that wanders less than this (touch jitter) still counts as held still. */
+const LONG_PRESS_SLOP = 10;
 
 export function Battlefield() {
   const session = useGame((s) => s.session);
@@ -112,12 +124,24 @@ export function Battlefield() {
   /** Viewport box in page coords, so the drag layer can sit exactly on top. */
   const [vpBox, setVpBox] = useState({ left: 0, top: 0, width: 0, height: 0 });
   const [dragPositions, setDragPositions] = useState<Record<string, { x: number; y: number }>>({});
+  /** Marquee rectangle in viewport-local coords, while one is being drawn. */
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  /** Where a touch long-press has armed (ring cue), viewport-local. */
+  const [armedAt, setArmedAt] = useState<{ x: number; y: number } | null>(null);
+  const [spacePan, setSpacePan] = useState(false);
   const dragRef = useRef<DragState | null>(null);
   const gestureRef = useRef<ViewGesture | null>(null);
   /** Local coords of every pointer currently down on the viewport. */
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const lastCursorSent = useRef(0);
   const lastDragSent = useRef(0);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const spaceHeld = useRef(false);
+  /** A native touch contextmenu fired during this press — Android opened the
+   * card menu itself, so the long-press timer must stand down. */
+  const nativeCtxRef = useRef(false);
+  /** Was the most recent pointerdown touch/pen? For contextmenu provenance. */
+  const lastPointerTouchy = useRef(false);
 
   const mySeat = session?.seat ?? null;
   const theta = viewRotation(mySeat);
@@ -145,6 +169,36 @@ export function Battlefield() {
   useEffect(() => {
     liveView.current = view;
   }, [view]);
+
+  // Space is a pan quasimode (Figma): while held, left-drag pans from
+  // anywhere — including over cards — instead of selecting or moving them.
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat) return;
+      const t = e.target as HTMLElement;
+      if (t.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+      spaceHeld.current = true;
+      setSpacePan(true);
+      e.preventDefault(); // space must not scroll or "click" a focused button
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return;
+      spaceHeld.current = false;
+      setSpacePan(false);
+    };
+    const drop = () => {
+      spaceHeld.current = false;
+      setSpacePan(false);
+    };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', drop);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', drop);
+    };
+  }, []);
 
   const seatOf = useMemo(() => {
     const m = new Map<string, number>();
@@ -186,6 +240,105 @@ export function Battlefield() {
     sendEphemeral({ t: 'drag', by: session.playerId, guid, x: world.x, y: world.y, ts: Date.now() });
   };
 
+  const clearLongPress = () => {
+    if (longPressRef.current != null) clearTimeout(longPressRef.current);
+    longPressRef.current = null;
+  };
+
+  /** The background's table menu, at a screen point (right-click or touch release). */
+  const openTableMenu = (clientX: number, clientY: number) => {
+    if (!session || session.seat === null) return;
+    const local = toLocal({ clientX, clientY });
+    const world = screenToWorld(view, local.x, local.y);
+    const st = useGame.getState();
+    const mine = Object.values(st.cards).filter(
+      (c) => c.zone === 'battlefield' && c.controllerId === session.playerId
+    );
+    useUI.getState().openCtxMenu({
+      x: clientX,
+      y: clientY,
+      items: [
+        { label: 'Untap all  (U)', action: () => actions.untapAll() },
+        {
+          label: 'Tap all',
+          action: () => actions.tapCards(mine.filter((c) => !c.tapped).map((c) => c.guid), true),
+        },
+        { sep: true, label: '' },
+        { label: 'Take turn — untap, upkeep, draw', action: () => actions.takeTurn() },
+        { sep: true, label: '' },
+        {
+          label: 'Create token here…',
+          action: () => useUI.getState().openModal({ kind: 'tokens', at: world }),
+        },
+        { sep: true, label: '' },
+        {
+          label: `Select all my cards (${mine.length})`,
+          action: () => st.setSelection(mine.map((c) => c.guid)),
+        },
+      ],
+    });
+  };
+
+  /** Select every battlefield card whose center falls inside a viewport rect. */
+  const applyMarquee = (
+    rect: { x0: number; y0: number; x1: number; y1: number },
+    additive: boolean,
+    base: string[]
+  ) => {
+    const hits = battlefieldCards
+      .filter((c) => {
+        const s = worldToScreen(view, c.x, c.y);
+        return s.x >= rect.x0 && s.x <= rect.x1 && s.y >= rect.y0 && s.y <= rect.y1;
+      })
+      .map((c) => c.guid);
+    useGame.getState().setSelection(additive ? [...new Set([...base, ...hits])] : hits);
+  };
+
+  /** Touch held still on the background: arm — dragging then draws the
+   * marquee, releasing opens the table menu (FigJam's long-press gesture). */
+  const armBackgroundPress = (pointerId: number) => {
+    clearLongPress();
+    longPressRef.current = setTimeout(() => {
+      const ges = gestureRef.current;
+      if (ges?.mode !== 'pan' || ges.pointerId !== pointerId) return;
+      if (pointersRef.current.size !== 1) return;
+      const p = pointersRef.current.get(pointerId);
+      if (!p || Math.hypot(p.x - ges.startX, p.y - ges.startY) > LONG_PRESS_SLOP) return;
+      // Undo the few px of jitter-pan, then arm at the press point.
+      setView((v) => clampView({ ...v, cx: ges.cx, cy: ges.cy }));
+      gestureRef.current = { mode: 'armed', pointerId, origin: { x: ges.startX, y: ges.startY } };
+      setArmedAt({ x: ges.startX, y: ges.startY });
+      navigator.vibrate?.(15);
+    }, LONG_PRESS_MS);
+  };
+
+  /** Touch held still on a card: abandon the drag and open its crucible menu.
+   * iOS never fires contextmenu for touch, so synthesize one; on Android the
+   * native event beats this timer and nativeCtxRef makes it a no-op. */
+  const armCardPress = (cardEl: HTMLElement, pointerId: number) => {
+    clearLongPress();
+    longPressRef.current = setTimeout(() => {
+      const drag = dragRef.current;
+      if (!drag || drag.pointerId !== pointerId || drag.moved) return;
+      if (pointersRef.current.size !== 1 || nativeCtxRef.current) return;
+      dragRef.current = null;
+      useUI.getState().setDragging(null);
+      setDragPositions({});
+      const p = pointersRef.current.get(pointerId);
+      const r = viewportRef.current!.getBoundingClientRect();
+      const clientX = r.left + (p?.x ?? 0);
+      const clientY = r.top + (p?.y ?? 0);
+      const ev = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX, clientY });
+      (ev as unknown as { __synthetic?: boolean }).__synthetic = true;
+      // Dispatch from the deepest element under the finger, not the [data-guid]
+      // wrapper: crucible's menu handler lives on its own root INSIDE the
+      // wrapper, and a dispatched event only bubbles upward from its target.
+      const target = document.elementFromPoint(clientX, clientY);
+      (cardEl.contains(target) ? target! : cardEl).dispatchEvent(ev);
+      navigator.vibrate?.(15);
+    }, LONG_PRESS_MS);
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (useUI.getState().ctxMenu) return;
     // Pressing inside an open menu must not start a pan: setPointerCapture on
@@ -195,6 +348,9 @@ export function Battlefield() {
     if ((e.target as HTMLElement).closest('.mtg-card-menu, .ctx-menu')) return;
     const local = toLocal(e);
     pointersRef.current.set(e.pointerId, local);
+    const touchy = e.pointerType !== 'mouse';
+    lastPointerTouchy.current = touchy;
+    if (pointersRef.current.size === 1) nativeCtxRef.current = false;
     const world = screenToWorld(view, local.x, local.y);
     const cardEl = (e.target as HTMLElement).closest('[data-guid]') as HTMLElement | null;
 
@@ -203,6 +359,7 @@ export function Battlefield() {
 
     // Second touch while panning: upgrade to a pinch, wherever it landed.
     if (gestureRef.current?.mode === 'pan' && pointersRef.current.size === 2) {
+      clearLongPress();
       const [a, b] = [...pointersRef.current.entries()];
       gestureRef.current = {
         mode: 'pinch',
@@ -217,7 +374,7 @@ export function Battlefield() {
     }
     if (gestureRef.current) return;
 
-    if (e.button === 0 && !e.altKey && cardEl) {
+    if (e.button === 0 && !e.altKey && cardEl && !(spaceHeld.current && !touchy)) {
       const guid = cardEl.dataset.guid!;
       const st = useGame.getState();
       let guids: string[];
@@ -237,19 +394,43 @@ export function Battlefield() {
       dragRef.current = { pointerId: e.pointerId, guids, offsets, startScreen: local, moved: false };
       useUI.getState().setDragging(guid);
       viewportRef.current!.setPointerCapture(e.pointerId);
+      if (touchy) armCardPress(cardEl, e.pointerId);
       e.preventDefault();
       return;
     }
 
-    // Everything else drags the view: left/touch on the background, middle
-    // button, or alt+drag from anywhere. Right-click never pans — the
-    // background right-click opens the table menu (see onContextMenu).
+    // Right-click never pans or selects — the background right-click opens
+    // the table menu (see onContextMenu).
     if (e.button !== 0 && e.button !== 1) return;
-    // Plain click empties the selection; shift-click misses the card it was
-    // aiming to add — punishing that with a dead selection is cruel.
-    if (e.button === 0 && !e.altKey && !e.shiftKey) useGame.getState().setSelection([]);
+
+    // Mouse left-drag on the felt draws a marquee (the Figma/TTS convention).
+    // Panning belongs to space/alt/middle — and to touch, where one finger
+    // pans and the marquee lives behind long-press instead. The dragPansTable
+    // pref flips the mouse default: plain drag pans, shift+drag marquees.
+    const pans =
+      touchy || e.button === 1 || e.altKey || spaceHeld.current || (prefs.dragPansTable && !e.shiftKey);
+    if (!pans) {
+      const additive = e.shiftKey;
+      // A plain press empties the selection; a shift press is aiming to add.
+      if (!additive) useGame.getState().setSelection([]);
+      gestureRef.current = {
+        mode: 'marquee',
+        pointerId: e.pointerId,
+        origin: local,
+        additive,
+        base: additive ? [...useGame.getState().selection] : [],
+      };
+      viewportRef.current!.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      return;
+    }
+
+    // A plain touch on the felt empties the selection, like the plain click
+    // above; modified pans (space/alt/middle) leave it alone.
+    if (e.button === 0 && !e.altKey && !spaceHeld.current) useGame.getState().setSelection([]);
     gestureRef.current = { mode: 'pan', pointerId: e.pointerId, startX: local.x, startY: local.y, cx: view.cx, cy: view.cy };
     viewportRef.current!.setPointerCapture(e.pointerId);
+    if (touchy) armBackgroundPress(e.pointerId);
     e.preventDefault();
   };
 
@@ -260,6 +441,27 @@ export function Battlefield() {
     publishCursor(world);
 
     const ges = gestureRef.current;
+    if (ges?.mode === 'armed') {
+      if (e.pointerId !== ges.pointerId) return;
+      // The armed finger started moving: that's the marquee, not the menu.
+      if (Math.hypot(local.x - ges.origin.x, local.y - ges.origin.y) > LONG_PRESS_SLOP) {
+        gestureRef.current = { mode: 'marquee', pointerId: ges.pointerId, origin: ges.origin, additive: false, base: [] };
+        setArmedAt(null);
+      }
+      return;
+    }
+    if (ges?.mode === 'marquee') {
+      if (e.pointerId !== ges.pointerId) return;
+      const rect = {
+        x0: Math.min(ges.origin.x, local.x),
+        y0: Math.min(ges.origin.y, local.y),
+        x1: Math.max(ges.origin.x, local.x),
+        y1: Math.max(ges.origin.y, local.y),
+      };
+      setMarquee(rect);
+      applyMarquee(rect, ges.additive, ges.base);
+      return;
+    }
     if (ges?.mode === 'pinch') {
       const a = pointersRef.current.get(ges.ids[0]);
       const b = pointersRef.current.get(ges.ids[1]);
@@ -280,6 +482,9 @@ export function Battlefield() {
     }
     if (ges?.mode === 'pan') {
       if (e.pointerId !== ges.pointerId) return;
+      // A real pan retires the pending long-press.
+      if (longPressRef.current != null && Math.hypot(local.x - ges.startX, local.y - ges.startY) > LONG_PRESS_SLOP)
+        clearLongPress();
       setView((v) => clampView({ ...v, cx: ges.cx + (local.x - ges.startX), cy: ges.cy + (local.y - ges.startY) }));
       return;
     }
@@ -287,7 +492,10 @@ export function Battlefield() {
     const drag = dragRef.current;
     if (drag && e.pointerId === drag.pointerId) {
       const dist = Math.hypot(local.x - drag.startScreen.x, local.y - drag.startScreen.y);
-      if (dist > 5) drag.moved = true;
+      if (dist > 5) {
+        drag.moved = true;
+        clearLongPress();
+      }
       if (drag.moved) {
         const positions: Record<string, { x: number; y: number }> = {};
         for (const g of drag.guids) {
@@ -302,8 +510,23 @@ export function Battlefield() {
 
   const onPointerUp = (e: React.PointerEvent) => {
     pointersRef.current.delete(e.pointerId);
+    clearLongPress();
 
     const ges = gestureRef.current;
+    if (ges?.mode === 'armed') {
+      if (e.pointerId !== ges.pointerId) return;
+      gestureRef.current = null;
+      setArmedAt(null);
+      // The held finger lifted without dragging: that's the table menu.
+      openTableMenu(e.clientX, e.clientY);
+      return;
+    }
+    if (ges?.mode === 'marquee') {
+      if (e.pointerId !== ges.pointerId) return;
+      gestureRef.current = null;
+      setMarquee(null);
+      return;
+    }
     if (ges?.mode === 'pinch') {
       if (!ges.ids.includes(e.pointerId)) return;
       // One finger left: back to a pan, re-baselined where that finger is now.
@@ -380,7 +603,14 @@ export function Battlefield() {
   /** Browser reclaimed a pointer (OS gesture, tab switch): abandon cleanly. */
   const onPointerCancel = (e: React.PointerEvent) => {
     pointersRef.current.delete(e.pointerId);
+    clearLongPress();
     const ges = gestureRef.current;
+    if ((ges?.mode === 'armed' || ges?.mode === 'marquee') && e.pointerId === ges.pointerId) {
+      gestureRef.current = null;
+      setArmedAt(null);
+      setMarquee(null);
+      return;
+    }
     if (ges?.mode === 'pinch' && ges.ids.includes(e.pointerId)) {
       const otherId = ges.ids[0] === e.pointerId ? ges.ids[1] : ges.ids[0];
       const survivor = pointersRef.current.get(otherId);
@@ -464,45 +694,37 @@ export function Battlefield() {
   return (
     <div
       ref={viewportRef}
-      className="battlefield-viewport"
+      className={spacePan ? 'battlefield-viewport space-pan' : 'battlefield-viewport'}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
       onContextMenu={(e) => {
+        const native = e.nativeEvent as MouseEvent & { __synthetic?: boolean; pointerType?: string };
+        // Touch menus are owned by the pointer handlers (menu on release,
+        // marquee on drag) — swallow Android's native long-press contextmenu
+        // so it can't preempt them at hold time. Cards are the exception:
+        // crucible's own handler already opened the card menu before this
+        // bubbled here, so just retire the pending drag from under it and
+        // flag the long-press timer to stand down (nativeCtxRef).
+        const touchDerived =
+          !native.__synthetic &&
+          (native.pointerType === 'touch' || (lastPointerTouchy.current && pointersRef.current.size > 0));
+        if (touchDerived) {
+          nativeCtxRef.current = true;
+          if ((e.target as HTMLElement).closest('[data-guid]')) {
+            dragRef.current = null;
+            useUI.getState().setDragging(null);
+            setDragPositions({});
+            return;
+          }
+          e.preventDefault();
+          return;
+        }
         // Cards keep their crucible menu; the background gets the table menu.
         if ((e.target as HTMLElement).closest('[data-guid]')) return;
         e.preventDefault();
-        if (!session || session.seat === null) return;
-        const local = toLocal(e);
-        const world = screenToWorld(view, local.x, local.y);
-        const st = useGame.getState();
-        const mine = Object.values(st.cards).filter(
-          (c) => c.zone === 'battlefield' && c.controllerId === session.playerId
-        );
-        useUI.getState().openCtxMenu({
-          x: e.clientX,
-          y: e.clientY,
-          items: [
-            { label: 'Untap all  (U)', action: () => actions.untapAll() },
-            {
-              label: 'Tap all',
-              action: () => actions.tapCards(mine.filter((c) => !c.tapped).map((c) => c.guid), true),
-            },
-            { sep: true, label: '' },
-            { label: 'Take turn — untap, upkeep, draw', action: () => actions.takeTurn() },
-            { sep: true, label: '' },
-            {
-              label: 'Create token here…',
-              action: () => useUI.getState().openModal({ kind: 'tokens', at: world }),
-            },
-            { sep: true, label: '' },
-            {
-              label: `Select all my cards (${mine.length})`,
-              action: () => st.setSelection(mine.map((c) => c.guid)),
-            },
-          ],
-        });
+        openTableMenu(e.clientX, e.clientY);
       }}
     >
       <div className="world" style={{ transform: worldTransform }}>
@@ -538,9 +760,22 @@ export function Battlefield() {
           </div>
         ))}
       </div>
+      {marquee && (
+        <div
+          className="marquee-rect"
+          style={{
+            left: marquee.x0,
+            top: marquee.y0,
+            width: marquee.x1 - marquee.x0,
+            height: marquee.y1 - marquee.y0,
+          }}
+        />
+      )}
+      {armedAt && <div className="press-armed" style={{ left: armedAt.x, top: armedAt.y }} />}
       <div className="help-hint">
-        click: tap · drag card: move · drag table: pan · scroll or pinch: zoom ·
-        shift-click: multi-select
+        {prefs.dragPansTable
+          ? 'click: tap · drag card: move · drag table: pan · shift+drag: select · scroll or pinch: zoom'
+          : 'click: tap · drag card: move · drag table: select · space or middle-drag: pan · scroll or pinch: zoom · shift: add'}
       </div>
       {lifted.length > 0 &&
         createPortal(

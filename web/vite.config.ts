@@ -8,6 +8,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
+    // localhost.run tunnels get a fresh *.lhr.life subdomain each session;
+    // the leading dot is vite's "this domain and every subdomain" wildcard.
+    allowedHosts: ['.lhr.life'],
     proxy: {
       '/api': { target: 'http://localhost:8787', changeOrigin: true },
       '/event': { target: 'http://localhost:8787', ws: true, changeOrigin: true },
