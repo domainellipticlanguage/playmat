@@ -7,9 +7,9 @@
 /** World is a TABLE x TABLE square. */
 export const TABLE = 2400;
 /** Card width in world units (height = ratio 1.4). Sized so a card is
- * readable at fit-to-screen zoom (~11 cards across the whole table). */
-export const CARD_W = 220;
-export const CARD_H = 308;
+ * readable at fit-to-screen zoom (~9 cards across the whole table). */
+export const CARD_W = 260;
+export const CARD_H = 364;
 
 /** Rotation (deg) of a seat's cards in world space: their "up" faces them. */
 export const SEAT_CARD_ANGLE = [0, 180, 270, 90];
@@ -50,7 +50,7 @@ export interface MatRect {
 /** Margin from the table edge to a mat. */
 const MAT_MARGIN = 90;
 /** Half-size of the neutral center square no mat ever covers (the DMZ). */
-const MAT_DMZ = 300;
+const MAT_DMZ = 180;
 /** Visual+functional inset per mat, so neighboring mats never touch. */
 const MAT_INSET = 14;
 
