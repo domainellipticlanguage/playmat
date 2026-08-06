@@ -332,6 +332,30 @@ describe('game state', () => {
     expect(seatDepth(p1)).toBeGreaterThan(seatDepth(ps));
   });
 
+  it('a full slot row overflows into a second layer across the slots, not a pile on one', () => {
+    const seats = [0, 1];
+    const slots = matSlots(0, matRect(0, (q) => seats.includes(q)), 0);
+    const n = slots.length;
+    const mkLand = (guid: string): PoolCard => ({
+      guid, ownerId: ME,
+      sf: { id: guid, name: 'Swamp', layout: 'normal', faces: [{ name: 'Swamp', img: '', type: 'Basic Land — Swamp' }] },
+    });
+    const pool: Record<string, PoolCard> = {};
+    for (let i = 0; i < n + 2; i++) pool[`ld${i}`] = mkLand(`ld${i}`);
+    useGame.setState((s) => ({ pool: { ...s.pool, ...pool } }));
+    for (let i = 0; i < n; i++) {
+      const p = actions.autoPlayPosition(`ld${i}`);
+      actions.moveCard(`ld${i}`, { zone: 'battlefield', ...p });
+    }
+    // Row full: the next two cards layer onto the first two slots in fill
+    // order — a small stagger off each base slot — not a cascade off the last.
+    const o1 = actions.autoPlayPosition(`ld${n}`);
+    actions.moveCard(`ld${n}`, { zone: 'battlefield', ...o1 });
+    const o2 = actions.autoPlayPosition(`ld${n + 1}`);
+    expect(o1).toEqual({ x: slots[0].x + 32, y: slots[0].y + 24 });
+    expect(o2).toEqual({ x: slots[1].x + 32, y: slots[1].y + 24 });
+  });
+
   it('mats never overlap and never cover the DMZ, for any seat occupancy', () => {
     for (let mask = 1; mask < 16; mask++) {
       const seats = [0, 1, 2, 3].filter((s) => mask & (1 << s));

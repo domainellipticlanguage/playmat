@@ -289,20 +289,24 @@ export function autoPlayPosition(guid: string): { x: number; y: number } {
   for (const p of slots) {
     if (!taken(p.x, p.y)) return p;
   }
-  // Row full: stagger diagonally past the last slot, one step per card, as
-  // deep as it takes — every buried card keeps a readable corner. Needs its
-  // own tight occupancy check: the 40×30 step is deliberately smaller than a
-  // card, so `taken`'s card-sized tolerance would skip spots that are open.
-  const last = slots[slots.length - 1];
+  // Row full: start a new LAYER across the same slots — every slot gets its
+  // second card (staggered so the buried card keeps a readable corner)
+  // before any slot gets a third, instead of one slot growing a runaway
+  // pile. Needs its own tight occupancy check: the stagger step is
+  // deliberately smaller than a card, so `taken`'s card-sized tolerance
+  // would call every layered spot occupied.
   const near = (x: number, y: number) =>
     Object.values(s.cards).some(
       (c) => c.zone === 'battlefield' && Math.abs(c.x - x) < 20 && Math.abs(c.y - y) < 20
     );
-  for (let i = 1; i < 60; i++) {
-    const p = { x: last.x + 40 * i, y: last.y + 30 * i };
-    if (!near(p.x, p.y)) return p;
+  for (let layer = 1; layer < 15; layer++) {
+    for (const p of slots) {
+      const cand = { x: p.x + 32 * layer, y: p.y + 24 * layer };
+      if (!near(cand.x, cand.y)) return cand;
+    }
   }
-  return { x: last.x + 40, y: last.y + 30 };
+  const last = slots[slots.length - 1];
+  return { x: last.x + 32, y: last.y + 24 };
 }
 
 /**

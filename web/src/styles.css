@@ -778,4 +778,9 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
      to the viewport and let the piles row wrap under the header instead. */
   .hud { max-width: calc(100vw - 20px); flex-wrap: wrap; }
   .piles { flex-wrap: wrap; }
+  /* The top tray must stretch like the bottom one ("long, not tall"): a
+     centered shrink-to-fit wrap container settles at its widest single child
+     (the who block), which folds the piles into a tall grid. Pinning both
+     edges gives the piles the full row. Collapsed pill keeps shrink-to-fit. */
+  .hud.pos-top:not(.collapsed) { left: 8px; right: 8px; transform: none; }
 }
