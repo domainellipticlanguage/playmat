@@ -247,34 +247,38 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .tcard .cardframe { border-radius: 6px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.6); }
 .tcard img { display: block; width: 100%; height: 100%; object-fit: cover; }
 
+/* Badges are in WORLD units (card = 260×364) and shrink with table zoom, so
+   they're sized like dice sitting on a card — big enough to read at fit
+   zoom, not print-sized type. */
 .counter-badges {
   position: absolute;
-  top: 4px;
-  left: 4px;
+  top: 8px;
+  left: 8px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   pointer-events: none;
 }
 .counter-badge {
   background: rgba(12, 12, 12, 0.88);
-  border: 1px solid var(--accent-soft);
+  border: 2px solid var(--accent-soft);
   color: var(--ink);
-  border-radius: 10px;
-  font-size: 11px;
-  padding: 1px 6px;
+  border-radius: 22px;
+  font-size: 30px;
+  font-weight: 700;
+  padding: 2px 12px;
   white-space: nowrap;
 }
 .pt-badge {
   position: absolute;
-  right: 3px;
-  bottom: 3px;
+  right: 6px;
+  bottom: 6px;
   background: rgba(12, 12, 12, 0.92);
-  border: 1px solid var(--accent-soft);
-  border-radius: 6px;
-  font-size: 12px;
+  border: 2px solid var(--accent-soft);
+  border-radius: 12px;
+  font-size: 34px;
   font-weight: bold;
-  padding: 0 5px;
+  padding: 0 10px;
   pointer-events: none;
 }
 .owner-ring { position: absolute; inset: -3px; border-radius: 8px; pointer-events: none; border: 2px solid transparent; }

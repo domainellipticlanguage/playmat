@@ -406,6 +406,32 @@ describe('game state', () => {
     expect(useGame.getState().cards[guid].controllerId).toBe(ME);
   });
 
+  it('proliferate adds one of each existing counter and touches nothing else', () => {
+    const [a, b, c] = useGame.getState().hidden.hand;
+    actions.playFromHand(a, 100, 100);
+    actions.playFromHand(b, 200, 100);
+    actions.playFromHand(c, 300, 100);
+    actions.setCounter(a, '+1/+1', 2);
+    actions.setCounter(a, 'charge', 1);
+    actions.setCounter(b, 'loyalty', 4);
+    actions.setPlayerCounter(ME, 'poison', 3);
+    // A countered card OFF the battlefield must not proliferate.
+    const s0 = useGame.getState();
+    s0.applyStateEvent({
+      t: 'card', g: s0.room!.gameId, by: FOE, seq: 1,
+      card: { guid: 'gy', zone: 'graveyard', ownerId: FOE, controllerId: FOE, x: 0, y: 0, tapped: false, faceDown: false, faceIndex: 0, rotIndex: 0, counters: { charge: 1 }, order: 1 },
+    });
+
+    actions.proliferate();
+    const s = useGame.getState();
+    expect(s.cards[a].counters).toEqual({ '+1/+1': 3, charge: 2 });
+    expect(s.cards[b].counters).toEqual({ loyalty: 5 });
+    expect(s.cards[c].counters).toEqual({});
+    expect(s.cards['gy'].counters).toEqual({ charge: 1 });
+    expect(s.playerStates[ME].counters).toEqual({ poison: 4 });
+    expect(s.log.some((l) => l.text.includes('proliferated'))).toBe(true);
+  });
+
   it('commander damage ticks life in the same event', () => {
     const cmdrGuid = 'enemy-cmdr';
     useGame.setState((s) => ({

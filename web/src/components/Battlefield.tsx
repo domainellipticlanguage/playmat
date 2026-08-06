@@ -265,6 +265,7 @@ export function Battlefield() {
         },
         { sep: true, label: '' },
         { label: 'Take turn — untap, upkeep, draw', action: () => actions.takeTurn() },
+        { label: 'Proliferate all counters', action: () => actions.proliferate() },
         { sep: true, label: '' },
         {
           label: 'Create token here…',
@@ -680,7 +681,7 @@ export function Battlefield() {
       seatOfController={seatOf.get(c.controllerId) ?? 0}
       dragPos={dragPositions[c.guid] ?? null}
       remoteDrag={drags[c.guid] && !dragPositions[c.guid] ? drags[c.guid] : null}
-      selected={selection.includes(c.guid)}
+      selCount={selection.includes(c.guid) ? selection.length : 0}
       faceAngleOverride={faceAngleOverride}
       ownerColor={colorOf(c.ownerId)}
     />

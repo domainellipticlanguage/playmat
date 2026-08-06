@@ -491,6 +491,34 @@ export function untapAll(): void {
   sendState([...mine.map((c) => cardEvent({ ...c, tapped: false })), logEvent({ kind: 'note', text: `${myName} untapped` })]);
 }
 
+/**
+ * Proliferate (Archidekt's "Proliferate all counters", honor system): every
+ * battlefield card and every player with at least one counter gets one more
+ * of each kind it already has. Rules-wise proliferate is "any number you
+ * choose" — the common case is everything, and stragglers are hand-fixed.
+ */
+export function proliferate(): void {
+  const { s, me, myName } = ctx();
+  const events: StateEvent[] = [];
+  for (const c of Object.values(s.cards)) {
+    if (c.zone !== 'battlefield' || Object.keys(c.counters).length === 0) continue;
+    const counters = { ...c.counters };
+    for (const k of Object.keys(counters)) counters[k] += 1;
+    events.push(cardEvent({ ...c, counters }));
+  }
+  for (const p of Object.values(s.playerStates)) {
+    if (Object.keys(p.counters ?? {}).length === 0) continue;
+    const counters = { ...p.counters };
+    for (const k of Object.keys(counters)) counters[k] += 1;
+    events.push(
+      playerEvent(p.playerId === me ? myPlayerState({ counters }) : theirPlayerState(p.playerId, { counters }))
+    );
+  }
+  if (!events.length) return;
+  events.push(logEvent({ kind: 'note', text: `${myName} proliferated` }));
+  sendState(events);
+}
+
 export function setRotIndex(guid: string, rotIndex: number): void {
   sendState([cardEvent({ ...currentCard(guid), rotIndex })]);
 }

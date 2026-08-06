@@ -127,6 +127,10 @@ async function setupRoom(ctx) {
   await page.waitForTimeout(400);
   const cardMenu = await page.locator('.mtg-card-menu').count();
   check('long-press on card opens card menu', cardMenu >= 1, `menus=${cardMenu}`);
+  // Both cards are still selected from the marquee, so this must be the
+  // GROUP menu, not the single-card one.
+  const groupTap = await page.getByText('Tap 2 selected', { exact: true }).count();
+  check('selected card menu shows group actions', groupTap >= 1, `items=${groupTap}`);
 
   check('touch: no console or page errors', errors.length === 0, errors[0]);
   await ctx.close();
@@ -173,6 +177,25 @@ async function setupRoom(ctx) {
   const selCount = await page.locator('.tcard.selected').count();
   check('mouse left-drag on felt shows marquee', rectShown);
   check('mouse marquee selected both cards', selCount === 2, `selected=${selCount}`);
+
+  // Right-click a selected card → group menu; its actions hit BOTH cards.
+  const tappedCount = () =>
+    page.evaluate(
+      () => [...document.querySelectorAll('.tcard')].filter((el) => el.style.transform.includes('rotate(90')).length
+    );
+  const cardPos = await center(page.locator('.tcard').first());
+  await page.mouse.click(cardPos.x, cardPos.y, { button: 'right' });
+  await page.waitForTimeout(300);
+  const tapItem = page.getByText('Tap 2 selected', { exact: true });
+  check('right-click on selected card shows group menu', (await tapItem.count()) === 1);
+  await tapItem.click().catch(() => {});
+  await page.waitForTimeout(300);
+  check('"Tap 2 selected" taps both cards', (await tappedCount()) === 2, `tapped=${await tappedCount()}`);
+  await page.mouse.click(cardPos.x, cardPos.y, { button: 'right' });
+  await page.waitForTimeout(300);
+  await page.getByText('Untap 2 selected').click().catch(() => {});
+  await page.waitForTimeout(300);
+  check('"Untap 2 selected" untaps both cards', (await tappedCount()) === 0, `tapped=${await tappedCount()}`);
 
   const t0 = await page.evaluate(() => document.querySelector('.world').style.transform);
   // Plain left-drag must NOT pan any more...
