@@ -84,27 +84,32 @@ function liveGroup(guid: string): string[] {
 /** Menu when the right-clicked card is part of a multi-card selection:
  * every action applies to the whole selection (Archidekt behavior). */
 function groupMenuItemsFor(card: CardState, pool: PoolCard | undefined, n: number) {
-  const each = (f: (c: CardState) => void) => {
-    const s = useGame.getState();
-    for (const g of liveGroup(card.guid)) {
-      const c = s.cards[g];
-      if (c) f(c);
-    }
+  // One withUndo batch per menu pick, so "Undo" reverts the whole group.
+  const each = (undoLabel: string, f: (c: CardState) => void) => {
+    actions.withUndo(undoLabel, () => {
+      const s = useGame.getState();
+      for (const g of liveGroup(card.guid)) {
+        const c = s.cards[g];
+        if (c) f(c);
+      }
+    });
   };
   const items: { label: string; action: () => void }[] = [
     { label: `Tap ${n} selected`, action: () => actions.tapCards(liveGroup(card.guid), true) },
     { label: `Untap ${n} selected`, action: () => actions.tapCards(liveGroup(card.guid), false) },
     {
       label: card.faceDown ? `Turn ${n} face up` : `Turn ${n} face down`,
-      action: () => each((c) => actions.setFaceDown(c.guid, !card.faceDown)),
+      action: () => each(`flip ${n} cards`, (c) => actions.setFaceDown(c.guid, !card.faceDown)),
     },
     {
       label: '+1/+1 counter on each',
-      action: () => each((c) => actions.setCounter(c.guid, '+1/+1', (c.counters['+1/+1'] ?? 0) + 1)),
+      action: () =>
+        each(`counters on ${n} cards`, (c) => actions.setCounter(c.guid, '+1/+1', (c.counters['+1/+1'] ?? 0) + 1)),
     },
     {
       label: '−1/−1 counter on each',
-      action: () => each((c) => actions.setCounter(c.guid, '-1/-1', (c.counters['-1/-1'] ?? 0) + 1)),
+      action: () =>
+        each(`counters on ${n} cards`, (c) => actions.setCounter(c.guid, '-1/-1', (c.counters['-1/-1'] ?? 0) + 1)),
     },
     {
       label: 'Counter on each…',
@@ -112,32 +117,38 @@ function groupMenuItemsFor(card: CardState, pool: PoolCard | undefined, n: numbe
         const label = prompt('Counter name (e.g. loyalty, charge):', 'charge');
         if (!label) return;
         const value = Number(prompt(`How many "${label}" counters on each?`, String((card.counters[label] ?? 0) + 1)));
-        if (Number.isFinite(value)) each((c) => actions.setCounter(c.guid, label, value));
+        if (Number.isFinite(value)) each(`counters on ${n} cards`, (c) => actions.setCounter(c.guid, label, value));
       },
     },
     {
       label: `Copy ${n} as tokens`,
-      action: () => each((c) => actions.copyCardAsToken(c.guid, { x: c.x + 40, y: c.y + 20 })),
+      action: () => each(`copy ${n} cards`, (c) => actions.copyCardAsToken(c.guid, { x: c.x + 40, y: c.y + 20 })),
     },
-    { label: `Move ${n} to hand`, action: () => each((c) => actions.moveCard(c.guid, { zone: 'hand' })) },
-    { label: `Move ${n} to graveyard`, action: () => each((c) => actions.moveCard(c.guid, { zone: 'graveyard' })) },
-    { label: `Move ${n} to exile`, action: () => each((c) => actions.moveCard(c.guid, { zone: 'exile' })) },
+    { label: `Move ${n} to hand`, action: () => each(`move ${n} cards`, (c) => actions.moveCard(c.guid, { zone: 'hand' })) },
+    {
+      label: `Move ${n} to graveyard`,
+      action: () => each(`move ${n} cards`, (c) => actions.moveCard(c.guid, { zone: 'graveyard' })),
+    },
+    { label: `Move ${n} to exile`, action: () => each(`move ${n} cards`, (c) => actions.moveCard(c.guid, { zone: 'exile' })) },
     {
       label: `Move ${n} to library (top)`,
-      action: () => each((c) => actions.moveCard(c.guid, { zone: 'library', libPos: 'top' })),
+      action: () => each(`move ${n} cards`, (c) => actions.moveCard(c.guid, { zone: 'library', libPos: 'top' })),
     },
     {
       label: `Move ${n} to library (bottom)`,
-      action: () => each((c) => actions.moveCard(c.guid, { zone: 'library', libPos: 'bottom' })),
+      action: () => each(`move ${n} cards`, (c) => actions.moveCard(c.guid, { zone: 'library', libPos: 'bottom' })),
     },
-    { label: `Move ${n} to command zone`, action: () => each((c) => actions.moveCard(c.guid, { zone: 'command' })) },
+    {
+      label: `Move ${n} to command zone`,
+      action: () => each(`move ${n} cards`, (c) => actions.moveCard(c.guid, { zone: 'command' })),
+    },
   ];
   if (pool?.isToken) {
     items.push({
       label: 'Remove selected tokens',
       action: () => {
         const s = useGame.getState();
-        each((c) => {
+        each('remove tokens', (c) => {
           if (s.pool[c.guid]?.isToken) actions.removeToken(c.guid);
         });
       },

@@ -15,7 +15,7 @@ import {
   newGuid,
   shuffled,
 } from '@playmat/shared';
-import { sendState, flushHidden } from './connection';
+import { sendState as sendToNet, flushHidden } from './connection';
 import { nextSeq, useGame, cardName } from './store';
 import { CARD_H, CARD_W, matRect, matSeatAt, matSlots } from './view';
 import { seatDefaultColor } from './colors';
@@ -205,10 +205,239 @@ function syncHandReveals(events: StateEvent[]): void {
 }
 
 // ---------------------------------------------------------------------------
+// Undo: a local stack of pre-action snapshots. Events are absolute per-subject
+// states (LWW), so undo = republish each touched subject's PRIOR state with a
+// fresh seq — no inverse verbs, no wire changes. Hidden zones ride along as
+// O(1) array refs (setHidden always replaces, never mutates). The one
+// non-generic case: a card that left a PEER's library has no prior public
+// marker, so its restore is a zone:'library' event their Z-6 fold-in honors.
+// ---------------------------------------------------------------------------
+
+type UndoPrior =
+  | { t: 'card'; state: CardState }
+  | { t: 'card-absent'; guid: string }
+  | { t: 'card-library'; guid: string; ownerId: string; index: number }
+  | { t: 'player'; state: PlayerState }
+  | { t: 'room'; state: RoomState }
+  /** First touch had no prior worth restoring; blocks later mid-batch capture. */
+  | { t: 'skip' };
+
+interface UndoEntry {
+  label: string;
+  gameId: string;
+  hidden: { library: string[]; hand: string[] };
+  priors: Map<string, UndoPrior>;
+}
+
+const UNDO_CAP = 50;
+const undoStack: UndoEntry[] = [];
+const redoStack: UndoEntry[] = [];
+let batch: UndoEntry | null = null;
+
+/** Group everything `fn` publishes into ONE undo entry (nesting: outermost wins). */
+export function withUndo(label: string, fn: () => void): void {
+  if (batch) return fn();
+  const s = useGame.getState();
+  if (!s.session) return fn();
+  batch = {
+    label,
+    gameId: s.room?.gameId ?? '',
+    hidden: { library: s.hidden.library, hand: s.hidden.hand },
+    priors: new Map(),
+  };
+  try {
+    fn();
+  } finally {
+    const b = batch!;
+    batch = null;
+    const st = useGame.getState();
+    const hiddenChanged =
+      b.hidden.library !== st.hidden.library || b.hidden.hand !== st.hidden.hand;
+    if (hiddenChanged || [...b.priors.values()].some((p) => p.t !== 'skip')) {
+      undoStack.push(b);
+      if (undoStack.length > UNDO_CAP) undoStack.shift();
+      redoStack.length = 0; // a fresh action forks history
+    }
+  }
+}
+
+/** Wrap an action so each top-level call becomes one undo entry. */
+function undoable<A extends unknown[]>(
+  label: string | ((...args: A) => string),
+  fn: (...args: A) => void
+): (...args: A) => void {
+  return (...args: A) =>
+    withUndo(typeof label === 'function' ? label(...args) : label, () => fn(...args));
+}
+
+/** Snapshot the pre-publish state of every subject in `events` (first touch wins). */
+function captureUndo(events: StateEvent[]): void {
+  const b = batch;
+  if (!b) return;
+  const s = useGame.getState();
+  for (const ev of events) {
+    if (ev.t === 'card') {
+      const key = `card#${ev.card.guid}`;
+      if (b.priors.has(key)) continue;
+      // A card with no public marker sitting in a PEER's published library
+      // (mill/tuck) must restore as put-it-back, not deletion — cardPriorNow
+      // handles all three shapes.
+      b.priors.set(key, cardPriorNow(ev.card.guid, ev.card.ownerId));
+    } else if (ev.t === 'player') {
+      const key = `player#${ev.player.playerId}`;
+      if (b.priors.has(key)) continue;
+      const prev = s.playerStates[ev.player.playerId];
+      b.priors.set(key, prev ? { t: 'player', state: prev } : { t: 'skip' });
+    } else if (ev.t === 'room') {
+      if (!b.priors.has('room')) b.priors.set('room', s.room ? { t: 'room', state: s.room } : { t: 'skip' });
+    }
+  }
+}
+
+/** All action publishes flow through here: capture undo priors, then send. */
+function sendState(events: StateEvent[]): void {
+  captureUndo(events);
+  sendToNet(events);
+}
+
+export function clearUndo(): void {
+  undoStack.length = 0;
+  redoStack.length = 0;
+}
+
+/** The current best restore target for one card guid (shared undo/redo capture). */
+function cardPriorNow(guid: string, ownerHint?: string): UndoPrior {
+  const s = useGame.getState();
+  const prev = s.cards[guid];
+  if (prev) return { t: 'card', state: prev };
+  const me = s.session?.playerId;
+  const owner = s.pool[guid]?.ownerId ?? ownerHint ?? me ?? '';
+  const index = owner !== me ? (s.playerStates[owner]?.library?.indexOf(guid) ?? -1) : -1;
+  return index >= 0 ? { t: 'card-library', guid, ownerId: owner, index } : { t: 'card-absent', guid };
+}
+
+/** Current state of an entry's subjects — the inverse entry for the opposite stack. */
+function inverseOf(entry: UndoEntry): UndoEntry {
+  const s = useGame.getState();
+  const priors = new Map<string, UndoPrior>();
+  for (const key of entry.priors.keys()) {
+    if (key === 'room') {
+      priors.set(key, s.room ? { t: 'room', state: s.room } : { t: 'skip' });
+    } else if (key.startsWith('card#')) {
+      priors.set(key, cardPriorNow(key.slice('card#'.length)));
+    } else if (key.startsWith('player#')) {
+      const prev = s.playerStates[key.slice('player#'.length)];
+      priors.set(key, prev ? { t: 'player', state: prev } : { t: 'skip' });
+    }
+  }
+  return {
+    label: entry.label,
+    gameId: entry.gameId,
+    hidden: { library: s.hidden.library, hand: s.hidden.hand },
+    priors,
+  };
+}
+
+/** Top entry of a stack for the CURRENT game (older-game leftovers are dropped). */
+function peekValid(stack: UndoEntry[]): UndoEntry | null {
+  const gid = useGame.getState().room?.gameId ?? '';
+  while (stack.length && stack[stack.length - 1].gameId !== gid) stack.pop();
+  return stack[stack.length - 1] ?? null;
+}
+
+export function canUndo(): boolean {
+  return peekValid(undoStack) !== null;
+}
+
+export function undoLabel(): string | null {
+  return peekValid(undoStack)?.label ?? null;
+}
+
+export function canRedo(): boolean {
+  return peekValid(redoStack) !== null;
+}
+
+export function redoLabel(): string | null {
+  return peekValid(redoStack)?.label ?? null;
+}
+
+/** Republish an entry's snapshots — the shared engine of undo AND redo. */
+function applyEntry(entry: UndoEntry, verb: 'undid' | 'redid'): void {
+  const { s, me, myName } = ctx();
+  // Hidden zones first: my player-state republish derives counts from them.
+  const hiddenChanged =
+    entry.hidden.library !== s.hidden.library || entry.hidden.hand !== s.hidden.hand;
+  if (hiddenChanged) s.setHidden(entry.hidden.library, entry.hidden.hand);
+  const events: StateEvent[] = [];
+  let myPlayerDone = false;
+  for (const prior of entry.priors.values()) {
+    switch (prior.t) {
+      case 'card':
+        events.push(cardEvent(prior.state));
+        break;
+      case 'card-absent':
+        if (useGame.getState().cards[prior.guid]) {
+          events.push(cardEvent({ ...currentCard(prior.guid), del: true }));
+        }
+        break;
+      case 'card-library':
+        events.push(
+          cardEvent({
+            ...currentCard(prior.guid),
+            zone: 'library',
+            zoneOwnerId: prior.ownerId,
+            controllerId: prior.ownerId,
+            tapped: false,
+            faceDown: false,
+            rotIndex: 0,
+            counters: {},
+            revealed: false,
+            order: 0,
+            libPos: prior.index,
+          })
+        );
+        break;
+      case 'player':
+        if (prior.state.playerId === me) {
+          events.push(playerEvent(myPlayerState(prior.state)));
+          myPlayerDone = true;
+        } else {
+          events.push(playerEvent(theirPlayerState(prior.state.playerId, prior.state)));
+        }
+        break;
+      case 'room':
+        events.push(roomEvent(prior.state));
+        break;
+      case 'skip':
+        break;
+    }
+  }
+  if (hiddenChanged && !myPlayerDone) events.push(playerEvent(myPlayerState()));
+  events.push(logEvent({ kind: 'note', text: `${myName} ${verb}: ${entry.label}` }));
+  sendState(events); // no batch open → captures nothing (undo isn't undoable)
+}
+
+export function undoLast(): void {
+  const entry = peekValid(undoStack);
+  if (!entry) return;
+  undoStack.pop();
+  redoStack.push(inverseOf(entry));
+  applyEntry(entry, 'undid');
+}
+
+export function redoLast(): void {
+  const entry = peekValid(redoStack);
+  if (!entry) return;
+  redoStack.pop();
+  undoStack.push(inverseOf(entry));
+  applyEntry(entry, 'redid');
+}
+
+// ---------------------------------------------------------------------------
 // Public actions
 // ---------------------------------------------------------------------------
 
-export function drawCards(n: number): void {
+export const drawCards = undoable('draw', (n: number): void => {
   const { s, me, myName } = ctx();
   const take = s.hidden.library.slice(0, n);
   if (take.length === 0) return;
@@ -223,7 +452,7 @@ export function drawCards(n: number): void {
   events.push(playerEvent(myPlayerState()));
   events.push(logEvent({ kind: 'note', text: `${myName} drew ${take.length} card${take.length > 1 ? 's' : ''}` }));
   sendState(events);
-}
+});
 
 export interface MoveTarget {
   zone: ZoneName;
@@ -343,7 +572,7 @@ export function reassertCards(guids: string[]): void {
 }
 
 /** The universal move (C-11, Z-6). Handles hidden<->public bookkeeping. */
-export function moveCard(guid: string, target: MoveTarget): void {
+export const moveCard = undoable('move card', (guid: string, target: MoveTarget): void => {
   const { s, me } = ctx();
   const cur = currentCard(guid);
   // Not caller-supplied: the destination zone's owner IS the card's owner for
@@ -406,14 +635,17 @@ export function moveCard(guid: string, target: MoveTarget): void {
     events.push(playerEvent(myPlayerState()));
   }
   sendState(events);
-}
+});
 
-export function playFromHand(guid: string, x: number, y: number, faceDown = false): void {
-  moveCard(guid, { zone: 'battlefield', x, y, faceDown });
-}
+export const playFromHand = undoable(
+  'play card',
+  (guid: string, x: number, y: number, faceDown: boolean = false): void => {
+    moveCard(guid, { zone: 'battlefield', x, y, faceDown });
+  }
+);
 
 /** Mill: top N of my library into my graveyard, with one log line. */
-export function millCards(n: number): void {
+export const millCards = undoable('mill', (n: number): void => {
   const { s, myName } = ctx();
   const take = s.hidden.library.slice(0, n);
   for (const guid of take) moveCard(guid, { zone: 'graveyard' });
@@ -422,14 +654,14 @@ export function millCards(n: number): void {
       logEvent({ kind: 'zone', text: `${myName} milled ${take.length} card${take.length > 1 ? 's' : ''}` }),
     ]);
   }
-}
+});
 
 /**
  * Mill a PEER from their published library order (honor system, like life).
  * The store prunes milled guids from that copy as the card events apply, so
  * repeated mills see fresh tops without waiting for the owner's republish.
  */
-export function millTheirCards(ownerId: string, n: number): void {
+export const millTheirCards = undoable('mill', (ownerId: string, n: number): void => {
   const { s, myName } = ctx();
   const name = s.players.find((p) => p.playerId === ownerId)?.name ?? '?';
   const take = (s.playerStates[ownerId]?.library ?? []).slice(0, n);
@@ -442,7 +674,7 @@ export function millTheirCards(ownerId: string, n: number): void {
       }),
     ]);
   }
-}
+});
 
 /** Reorder my hand locally — order is private, so nothing is published. */
 export function reorderHand(guid: string, toIndex: number): void {
@@ -453,16 +685,16 @@ export function reorderHand(guid: string, toIndex: number): void {
   s.setHidden(s.hidden.library, hand);
 }
 
-export function setCardPosition(guid: string, x: number, y: number): void {
+export const setCardPosition = undoable('move card', (guid: string, x: number, y: number): void => {
   const cur = currentCard(guid);
   const controllerId = cur.zone === 'battlefield' ? controllerAt(x, y, cur.controllerId) : cur.controllerId;
   const events: StateEvent[] = [cardEvent({ ...cur, x, y, controllerId })];
   const log = controlLog(guid, cur, controllerId);
   if (log) events.push(log);
   sendState(events);
-}
+});
 
-export function moveCardsGroup(moves: { guid: string; x: number; y: number }[]): void {
+export const moveCardsGroup = undoable('move cards', (moves: { guid: string; x: number; y: number }[]): void => {
   const events: StateEvent[] = [];
   for (const { guid, x, y } of moves) {
     const cur = currentCard(guid);
@@ -472,24 +704,27 @@ export function moveCardsGroup(moves: { guid: string; x: number; y: number }[]):
     if (log) events.push(log);
   }
   sendState(events);
-}
+});
 
-export function tapCards(guids: string[], tapped: boolean): void {
-  const events = guids
-    .map((g) => currentCard(g))
-    .filter((c) => c.tapped !== tapped)
-    .map((c) => cardEvent({ ...c, tapped }));
-  if (events.length) sendState(events);
-}
+export const tapCards = undoable(
+  (_guids: string[], tapped: boolean) => (tapped ? 'tap' : 'untap'),
+  (guids: string[], tapped: boolean): void => {
+    const events = guids
+      .map((g) => currentCard(g))
+      .filter((c) => c.tapped !== tapped)
+      .map((c) => cardEvent({ ...c, tapped }));
+    if (events.length) sendState(events);
+  }
+);
 
-export function untapAll(): void {
+export const untapAll = undoable('untap all', (): void => {
   const { s, me, myName } = ctx();
   const mine = Object.values(s.cards).filter(
     (c) => c.zone === 'battlefield' && c.controllerId === me && c.tapped
   );
   if (!mine.length) return;
   sendState([...mine.map((c) => cardEvent({ ...c, tapped: false })), logEvent({ kind: 'note', text: `${myName} untapped` })]);
-}
+});
 
 /**
  * Proliferate (Archidekt's "Proliferate all counters", honor system): every
@@ -497,7 +732,7 @@ export function untapAll(): void {
  * of each kind it already has. Rules-wise proliferate is "any number you
  * choose" — the common case is everything, and stragglers are hand-fixed.
  */
-export function proliferate(): void {
+export const proliferate = undoable('proliferate', (): void => {
   const { s, me, myName } = ctx();
   const events: StateEvent[] = [];
   for (const c of Object.values(s.cards)) {
@@ -517,28 +752,28 @@ export function proliferate(): void {
   if (!events.length) return;
   events.push(logEvent({ kind: 'note', text: `${myName} proliferated` }));
   sendState(events);
-}
+});
 
-export function setRotIndex(guid: string, rotIndex: number): void {
+export const setRotIndex = undoable('turn/transform', (guid: string, rotIndex: number): void => {
   sendState([cardEvent({ ...currentCard(guid), rotIndex })]);
-}
+});
 
-export function setFaceDown(guid: string, faceDown: boolean): void {
+export const setFaceDown = undoable('flip', (guid: string, faceDown: boolean): void => {
   sendState([cardEvent({ ...currentCard(guid), faceDown })]);
-}
+});
 
-export function setCounter(guid: string, label: string, value: number): void {
+export const setCounter = undoable('counter change', (guid: string, label: string, value: number): void => {
   const cur = currentCard(guid);
   const counters = { ...cur.counters };
   if (value <= 0) delete counters[label];
   else counters[label] = value;
   sendState([cardEvent({ ...cur, counters })]);
-}
+});
 
-export function revealFromHand(guid: string, revealed: boolean): void {
+export const revealFromHand = undoable('reveal', (guid: string, revealed: boolean): void => {
   const { me } = ctx();
   sendState([cardEvent({ ...currentCard(guid), zone: 'hand', zoneOwnerId: me, revealed })]);
-}
+});
 
 export function setShowHandToTable(on: boolean): void {
   const { s, me } = ctx();
@@ -555,34 +790,32 @@ export function setShowHandToTable(on: boolean): void {
 
 // --- Library operations -----------------------------------------------------
 
-export function shuffleLibrary(quiet = false): void {
+export const shuffleLibrary = undoable('shuffle', (quiet = false): void => {
   const { s, myName } = ctx();
   s.setHidden(shuffled(s.hidden.library), s.hidden.hand);
   const events: StateEvent[] = [playerEvent(myPlayerState())];
   if (!quiet) events.push(logEvent({ kind: 'shuffle', text: `${myName} shuffled their library` }));
   sendState(events);
-}
+});
 
 /** Commit a peek/scry/surveil: reorder the peeked window in place. */
-export function commitPeek(opts: {
-  seen: number;
-  keepTop: string[];
-  toBottom: string[];
-  label?: string;
-}): void {
-  const { s, myName } = ctx();
-  const rest = s.hidden.library.slice(opts.seen);
-  s.setHidden([...opts.keepTop, ...rest, ...opts.toBottom], s.hidden.hand);
-  sendState([
-    playerEvent(myPlayerState()),
-    logEvent({ kind: 'note', text: `${myName} ${opts.label ?? `looked at the top ${opts.seen}`}` }),
-  ]);
-}
+export const commitPeek = undoable(
+  'peek/scry',
+  (opts: { seen: number; keepTop: string[]; toBottom: string[]; label?: string }): void => {
+    const { s, myName } = ctx();
+    const rest = s.hidden.library.slice(opts.seen);
+    s.setHidden([...opts.keepTop, ...rest, ...opts.toBottom], s.hidden.hand);
+    sendState([
+      playerEvent(myPlayerState()),
+      logEvent({ kind: 'note', text: `${myName} ${opts.label ?? `looked at the top ${opts.seen}`}` }),
+    ]);
+  }
+);
 
-export function setTopRevealed(on: boolean): void {
+export const setTopRevealed = undoable('top reveal', (on: boolean): void => {
   const { s } = ctx();
   sendState([playerEvent(myPlayerState({ topRevealed: on ? s.hidden.library[0] ?? null : null }))]);
-}
+});
 
 // --- Player state -----------------------------------------------------------
 
@@ -596,13 +829,13 @@ export function publishMyCounts(): void {
   sendState([playerEvent(myPlayerState())]);
 }
 
-export function setLife(playerId: string, life: number): void {
+export const setLife = undoable('life change', (playerId: string, life: number): void => {
   const { me } = ctx();
   const ps = playerId === me ? myPlayerState({ life }) : theirPlayerState(playerId, { life });
   sendState([playerEvent(ps)]);
-}
+});
 
-export function setPlayerCounter(playerId: string, name: string, value: number): void {
+export const setPlayerCounter = undoable('player counter', (playerId: string, name: string, value: number): void => {
   const { s, me } = ctx();
   const prev = s.playerStates[playerId]?.counters ?? {};
   const counters = { ...prev };
@@ -610,10 +843,10 @@ export function setPlayerCounter(playerId: string, name: string, value: number):
   else counters[name] = value;
   const ps = playerId === me ? myPlayerState({ counters }) : theirPlayerState(playerId, { counters });
   sendState([playerEvent(ps)]);
-}
+});
 
 /** Commander damage ticks the victim's life in the same event (README §2.1). */
-export function dealCommanderDamage(victimId: string, commanderGuid: string, delta: number): void {
+export const dealCommanderDamage = undoable('commander damage', (victimId: string, commanderGuid: string, delta: number): void => {
   const { s, me } = ctx();
   const prev = s.playerStates[victimId];
   const prevDmg = prev?.commanderDamage?.[commanderGuid] ?? 0;
@@ -627,7 +860,7 @@ export function dealCommanderDamage(victimId: string, commanderGuid: string, del
       ? myPlayerState({ commanderDamage, life })
       : theirPlayerState(victimId, { commanderDamage, life });
   sendState([playerEvent(ps)]);
-}
+});
 
 // --- Tokens (C-7) -----------------------------------------------------------
 
@@ -641,7 +874,7 @@ function nextPoolChunk(): number {
   return max + 1;
 }
 
-export function createTokens(tokens: PoolCard[], at: { x: number; y: number }): void {
+export const createTokens = undoable('create tokens', (tokens: PoolCard[], at: { x: number; y: number }): void => {
   const { s, me, gameId, myName } = ctx();
   const events: StateEvent[] = [
     { t: 'pool', g: gameId, by: me, seq: 1, chunk: nextPoolChunk(), nChunks: 1, cards: tokens },
@@ -665,7 +898,7 @@ export function createTokens(tokens: PoolCard[], at: { x: number; y: number }): 
   // Tokens need their pool entry to land with/before their card state; the
   // store applies optimistically in order and peers tolerate either order.
   sendState(events);
-}
+});
 
 const TOKEN_FRAME: Record<string, string> = { W: 'white', U: 'blue', B: 'black', R: 'red', G: 'green' };
 
@@ -703,17 +936,17 @@ function tokenDataFrom(src: PoolCard): Record<string, unknown> {
 }
 
 /** Token copy of an existing card (C-7), rendered as a crucible token face. */
-export function copyCardAsToken(guid: string, at: { x: number; y: number }): void {
+export const copyCardAsToken = undoable('copy as token', (guid: string, at: { x: number; y: number }): void => {
   const { s, me } = ctx();
   const src = s.pool[guid];
   if (!src) return;
   createTokens([{ guid: newGuid(), ownerId: me, isToken: true, custom: tokenDataFrom(src) }], at);
-}
+});
 
-export function removeToken(guid: string): void {
+export const removeToken = undoable('remove token', (guid: string): void => {
   const cur = currentCard(guid);
   sendState([cardEvent({ ...cur, del: true })]);
-}
+});
 
 // --- Dice, turns, resets ----------------------------------------------------
 
@@ -741,7 +974,7 @@ export function flipCoin(): void {
  * done" is said out of band). The count bumps only when the marker actually
  * changes hands, so re-taking your own turn doesn't inflate it.
  */
-export function takeTurn(): void {
+export const takeTurn = undoable('take turn', (): void => {
   const { s, me, myName } = ctx();
   untapAll();
   drawCards(1);
@@ -751,11 +984,12 @@ export function takeTurn(): void {
     roomEvent({ gameId: s.room?.gameId ?? '', turnPlayerId: me, turn }),
     logEvent({ kind: 'turn', text: `${myName} took turn ${turn} (untap, upkeep, draw)` }),
   ]);
-}
+});
 
 /** G-7: new game. Broadcasts a fresh gameId; every seated client re-sets-up. */
 export function resetGame(): void {
   const { s, myName } = ctx();
+  clearUndo();
   sendState([
     roomEvent({ gameId: newGuid(), turnPlayerId: null, turn: 0 }),
     logEvent({ kind: 'reset', text: `${myName} started a new game — shuffle up!` }),
@@ -816,6 +1050,7 @@ export function runNewGameSetup(gameId: string): void {
   const mine = Object.values(s.pool).filter((p) => p.ownerId === me && !p.isToken);
   if (mine.length === 0) return;
   s.markSetupDone(gameId);
+  clearUndo(); // new game: nothing before shuffle-up is undoable
 
   const commanders = mine.filter((p) => p.commander);
   const shuffledDeck = shuffled(mine.filter((p) => !p.commander).map((p) => p.guid));
@@ -858,7 +1093,7 @@ export function runNewGameSetup(gameId: string): void {
  * Mulligan (Archidekt-style): the whole hand shuffles back in, draw 7 again.
  * London-rule bottoming is left to the player ("to library (bottom)").
  */
-export function mulligan(): void {
+export const mulligan = undoable('mulligan', (): void => {
   const { s, me, myName } = ctx();
   const oldHand = s.hidden.hand;
   if (oldHand.length === 0 && s.hidden.library.length === 0) return;
@@ -878,4 +1113,4 @@ export function mulligan(): void {
   events.push(playerEvent(myPlayerState()));
   events.push(logEvent({ kind: 'shuffle', text: `${myName} took a mulligan` }));
   sendState(events);
-}
+});

@@ -46,6 +46,20 @@ export function Table() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (useUI.getState().modal.kind !== 'none') return;
       if (spectator) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (e.shiftKey) actions.redoLast();
+        else actions.undoLast();
+        return;
+      }
+      if (mod && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault();
+        actions.redoLast();
+        return;
+      }
+      // Single-letter shortcuts must not shadow browser combos (⌘D etc.).
+      if (mod || e.altKey) return;
       if (e.key === 'd' || e.key === 'D') actions.drawCards(1);
       else if (e.key === 'm' || e.key === 'M') {
         // Hovering a peer's library mills THEM (mill decks: point and M-M-M).

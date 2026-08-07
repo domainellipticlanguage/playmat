@@ -258,6 +258,13 @@ export function Battlefield() {
       x: clientX,
       y: clientY,
       items: [
+        ...(actions.canUndo()
+          ? [{ label: `Undo ${actions.undoLabel()}  (⌘Z)`, action: () => actions.undoLast() }]
+          : []),
+        ...(actions.canRedo()
+          ? [{ label: `Redo ${actions.redoLabel()}  (⇧⌘Z)`, action: () => actions.redoLast() }]
+          : []),
+        ...(actions.canUndo() || actions.canRedo() ? [{ sep: true, label: '' }] : []),
         { label: 'Untap all  (U)', action: () => actions.untapAll() },
         {
           label: 'Tap all',

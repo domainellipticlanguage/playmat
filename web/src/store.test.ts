@@ -467,3 +467,118 @@ describe('game state', () => {
     expect(s2.playerStates[ME].life).toBe(40);
   });
 });
+
+describe('undo/redo', () => {
+  beforeEach(() => {
+    actions.importDeck(mkPool(10));
+    actions.clearUndo();
+  });
+
+  it('undoes and redoes a tap', () => {
+    const g = useGame.getState().hidden.hand[0];
+    actions.playFromHand(g, 100, 100);
+    actions.tapCards([g], true);
+    expect(useGame.getState().cards[g].tapped).toBe(true);
+    actions.undoLast();
+    expect(useGame.getState().cards[g].tapped).toBe(false);
+    expect(useGame.getState().log.some((l) => l.text.includes('undid: tap'))).toBe(true);
+    actions.redoLast();
+    expect(useGame.getState().cards[g].tapped).toBe(true);
+  });
+
+  it('undoing a play returns the card to hand and deletes the public marker', () => {
+    const hand0 = useGame.getState().hidden.hand;
+    const g = hand0[0];
+    actions.playFromHand(g, 100, 100);
+    expect(useGame.getState().cards[g].zone).toBe('battlefield');
+    actions.undoLast();
+    const s = useGame.getState();
+    expect(s.cards[g]).toBeUndefined();
+    expect(s.hidden.hand).toEqual(hand0);
+    expect(s.playerStates[ME].handCount).toBe(hand0.length);
+    actions.redoLast();
+    expect(useGame.getState().cards[g].zone).toBe('battlefield');
+    expect(useGame.getState().hidden.hand).not.toContain(g);
+  });
+
+  it('undoing a draw puts the cards back on top in order', () => {
+    const lib0 = useGame.getState().hidden.library;
+    actions.drawCards(2);
+    expect(useGame.getState().hidden.library).toHaveLength(lib0.length - 2);
+    actions.undoLast();
+    expect(useGame.getState().hidden.library).toEqual(lib0);
+  });
+
+  it('token create → delete → undo ×2 round-trips through resurrection', () => {
+    actions.createTokens([{ guid: 'tok1', ownerId: ME, isToken: true, custom: { name: 'Tok' } }], { x: 5, y: 6 });
+    expect(useGame.getState().cards['tok1'].zone).toBe('battlefield');
+    actions.removeToken('tok1');
+    expect(useGame.getState().cards['tok1']).toBeUndefined();
+    actions.undoLast(); // undo the delete → resurrect
+    expect(useGame.getState().cards['tok1']?.zone).toBe('battlefield');
+    actions.undoLast(); // undo the create → gone again
+    expect(useGame.getState().cards['tok1']).toBeUndefined();
+    actions.redoLast(); // redo the create → back
+    expect(useGame.getState().cards['tok1']?.zone).toBe('battlefield');
+  });
+
+  it('withUndo groups a multi-call action into one entry', () => {
+    const [a, b] = useGame.getState().hidden.hand;
+    actions.playFromHand(a, 100, 100);
+    actions.playFromHand(b, 200, 100);
+    actions.withUndo('group counters', () => {
+      actions.setCounter(a, '+1/+1', 1);
+      actions.setCounter(b, '+1/+1', 2);
+    });
+    actions.undoLast();
+    const s = useGame.getState();
+    expect(s.cards[a].counters).toEqual({});
+    expect(s.cards[b].counters).toEqual({});
+  });
+
+  it('undoing a mill of a peer restores their library card', () => {
+    useGame.setState((s) => ({
+      pool: {
+        ...s.pool,
+        f1: { guid: 'f1', ownerId: FOE, sf: { id: 'f', name: 'Foe Card', layout: 'normal', faces: [{ name: 'Foe Card', img: '' }] } },
+      },
+    }));
+    const gid = useGame.getState().room!.gameId;
+    useGame.getState().applyStateEvent({
+      t: 'player', g: gid, by: FOE, seq: 1,
+      player: {
+        playerId: FOE, seat: 1, name: 'Foe', life: 40, counters: {}, commanderDamage: {},
+        handCount: 0, libraryCount: 1, topRevealed: null, library: ['f1'],
+      },
+    });
+    actions.millTheirCards(FOE, 1);
+    expect(useGame.getState().cards['f1'].zone).toBe('graveyard');
+    actions.undoLast();
+    const c = useGame.getState().cards['f1'];
+    expect(c.zone).toBe('library');
+    expect(c.libPos).toBe(0);
+    expect(c.zoneOwnerId ?? c.ownerId).toBe(FOE);
+  });
+
+  it('undoing take turn restores the turn marker and the drawn card', () => {
+    const lib0 = useGame.getState().hidden.library;
+    actions.takeTurn();
+    expect(useGame.getState().room?.turnPlayerId).toBe(ME);
+    actions.undoLast();
+    expect(useGame.getState().room?.turnPlayerId).toBe(null);
+    expect(useGame.getState().hidden.library).toEqual(lib0);
+  });
+
+  it('a new action clears the redo stack; reset clears both', () => {
+    const g = useGame.getState().hidden.hand[0];
+    actions.playFromHand(g, 100, 100);
+    actions.tapCards([g], true);
+    actions.undoLast();
+    expect(actions.canRedo()).toBe(true);
+    actions.setCounter(g, 'charge', 1);
+    expect(actions.canRedo()).toBe(false);
+    expect(actions.canUndo()).toBe(true);
+    actions.resetGame();
+    expect(actions.canUndo()).toBe(false);
+  });
+});

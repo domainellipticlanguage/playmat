@@ -197,6 +197,14 @@ async function setupRoom(ctx) {
   await page.waitForTimeout(300);
   check('"Untap 2 selected" untaps both cards', (await tappedCount()) === 0, `tapped=${await tappedCount()}`);
 
+  // Undo/redo: ctrl+Z reverts the group untap, ctrl+shift+Z re-applies it.
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(300);
+  check('ctrl+z undoes the group untap', (await tappedCount()) === 2, `tapped=${await tappedCount()}`);
+  await page.keyboard.press('Control+Shift+z');
+  await page.waitForTimeout(300);
+  check('ctrl+shift+z redoes it', (await tappedCount()) === 0, `tapped=${await tappedCount()}`);
+
   const t0 = await page.evaluate(() => document.querySelector('.world').style.transform);
   // Plain left-drag must NOT pan any more...
   check('left-drag no longer pans', t0 === (await page.evaluate(() => document.querySelector('.world').style.transform)));
