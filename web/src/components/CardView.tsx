@@ -9,6 +9,7 @@
  * own click/context-menu behavior stays inert and events bubble, so parents
  * keep their click handlers and custom context menus.
  */
+import { memo } from 'react';
 import { MtgCard, type MtgCardMenuItem } from 'mtg-crucible/react';
 import type { PoolCard } from '@playmat/shared';
 import { cardSearchText, displayDataFor, useCustomDisplay } from '../cards';
@@ -46,7 +47,9 @@ export interface CardViewProps {
   style?: React.CSSProperties;
 }
 
-export function CardView({
+/** Memoized: hands/piles re-render on every store change; unchanged cards
+ * (stable pool ref + scalar props) skip their whole MtgCard subtree. */
+export const CardView = memo(function CardView({
   pool,
   rotIndex = 0,
   faceDown = false,
@@ -75,7 +78,7 @@ export function CardView({
       extraMenuItems={menuItems && withMenuClose(menuItems)}
     />
   );
-}
+});
 
 /**
  * Pointer-following ghost for drags out of the hand or a pile, sized to the

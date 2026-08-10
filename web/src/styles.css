@@ -229,7 +229,8 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   transition: transform 140ms ease;
   cursor: grab;
 }
-.tcard.dragging { transition: none; cursor: grabbing; z-index: 30 !important; }
+/* z-index stays inline (per-card stacking + drag lift) — no override here. */
+.tcard.dragging { transition: none; cursor: grabbing; }
 .tcard.remote-drag { transition: transform 150ms linear; opacity: 0.85; }
 /* Cards under your pointer get re-parented here (Battlefield portals them out)
    so they ride above the player HUDs instead of sliding under a life total.
@@ -333,7 +334,10 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 }
 .swatch.picked { border-color: var(--ink); }
 
-.cursor-dot { position: absolute; pointer-events: none; z-index: 60; transition: transform 150ms linear; }
+/* Above every card: per-card z grows over a game, and remote drags ride at
+   ~100k — a pointer must never be buried. (Scoped inside .world's stacking
+   context, so this can't leak over HUDs/modals.) */
+.cursor-dot { position: absolute; pointer-events: none; z-index: 500000; transition: transform 150ms linear; }
 .cursor-dot .dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 6px rgba(0,0,0,0.8); }
 .cursor-dot .label {
   font-size: 11px;
@@ -346,11 +350,16 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 
 /* ---------------- Player HUDs ---------------- */
 
+/* Tray layout: a full-width name header, then a body row of stats | piles.
+   Keeping the name OUT of the stats column means a long name never stretches
+   a dead-space column beside the life buttons — the tray is only ever as wide
+   as its widest functional row. */
 .hud {
   position: absolute;
   display: flex;
-  gap: 8px;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
@@ -358,24 +367,24 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   padding: 8px;
   z-index: 20;
 }
+.hud-body { display: flex; gap: 8px; align-items: flex-end; }
 .hud.pos-bottom { left: 10px; bottom: 10px; }
-.hud.pos-top { left: 50%; top: 10px; transform: translateX(-50%); flex-direction: row; align-items: flex-start; }
+.hud.pos-top { left: 50%; top: 10px; transform: translateX(-50%); }
+.hud.pos-top .hud-body { align-items: flex-start; }
 /* East/west seats get a tall, narrow tray: piles stack vertically so the
    tray hugs its edge instead of eating a wide slab of battlefield. */
 .hud.pos-left, .hud.pos-right {
   top: 50%;
   transform: translateY(-50%);
-  flex-direction: column;
-  align-items: stretch;
 }
+.hud.pos-left .hud-body, .hud.pos-right .hud-body { flex-direction: column; align-items: stretch; }
 .hud.pos-left { left: 10px; }
 .hud.pos-right { right: 10px; }
 .hud.pos-left .piles, .hud.pos-right .piles { flex-direction: column; align-self: center; }
-.hud.pos-left .who, .hud.pos-right .who { min-width: 0; }
 .hud.pos-left .revealed-strip, .hud.pos-right .revealed-strip { flex-wrap: wrap; max-width: 130px; }
 .hud.turn { border-color: var(--accent); box-shadow: 0 0 18px var(--accent-soft), var(--shadow); }
 
-.hud .who { display: flex; flex-direction: column; gap: 4px; min-width: 118px; }
+.hud .who { display: flex; flex-direction: column; gap: 4px; }
 /* Collapse chevron + folded tray (client-only, so it can't confuse peers). */
 .hud-collapse {
   position: absolute;
@@ -397,8 +406,21 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .hud-mini { display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; }
 .hud-mini .mini-stat { color: var(--ink-dim); }
 /* The header row collapses the tray on tap — the ▾ chevron alone is a tiny
-   target on a phone. Mirrors the collapsed tray's tap-anywhere-to-expand. */
-.hud .name { font-weight: bold; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+   target on a phone. Mirrors the collapsed tray's tap-anywhere-to-expand.
+   width:0 + min-width:100% keeps the name from contributing to the tray's
+   intrinsic width — it fills whatever the body row needs and ellipsizes. */
+.hud .name {
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  width: 0;
+  min-width: 100%;
+  padding-right: 16px; /* clear of the collapse chevron */
+}
+/* min-width:0 lets the flex item actually shrink so the ellipsis can kick in. */
+.hud .name .name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 /* Link / link-slash icon — a dot here read as a second color swatch. */
 .presence { display: inline-flex; align-items: center; color: var(--ink-dim); }
 /* Active-player chip — the green presence dot is connectivity, not turn. */
@@ -717,6 +739,29 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   100% { transform: rotate(720deg) scale(1); }
 }
 
+/* "X passed the turn to you" — brief, top-center, never blocks the table. */
+.turn-toast {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 0 18px var(--accent-soft), var(--shadow);
+  padding: 7px 14px;
+  font-size: 14px;
+  z-index: 50;
+  pointer-events: none;
+  white-space: nowrap;
+  /* Own animation, not .fade-pop: that would clobber the translateX centering. */
+  animation: turn-toast-in 180ms ease;
+}
+@keyframes turn-toast-in {
+  from { opacity: 0; transform: translateX(-50%) scale(0.96); }
+  to { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
 .fade-pop { animation: fade-pop 180ms ease; }
 @keyframes fade-pop { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
 
@@ -758,8 +803,8 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
    itself keeps most of the pixels. */
 
 @media (max-width: 1280px), (max-height: 820px) {
-  .hud { padding: 6px; gap: 6px; }
-  .hud .who { min-width: 92px; }
+  .hud { padding: 6px; }
+  .hud-body { gap: 6px; }
   .life .total { font-size: 24px; min-width: 40px; }
   .pile { width: 50px; height: 70px; }
   .pile .pile-label { font-size: 9px; }
@@ -780,7 +825,8 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   /* An expanded tray is wider than a phone — unconstrained it overflows the
      screen and strands the collapse chevron (top-right) unreachable. Cap it
      to the viewport and let the piles row wrap under the header instead. */
-  .hud { max-width: calc(100vw - 20px); flex-wrap: wrap; }
+  .hud { max-width: calc(100vw - 20px); }
+  .hud-body { flex-wrap: wrap; }
   .piles { flex-wrap: wrap; }
   /* The top tray must stretch like the bottom one ("long, not tall"): a
      centered shrink-to-fit wrap container settles at its widest single child

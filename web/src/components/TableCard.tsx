@@ -36,6 +36,12 @@ function menuItemsFor(card: CardState, pool: PoolCard | undefined) {
   const items: { label: string; action: () => void }[] = [];
   const g = card.guid;
   items.push({ label: card.tapped ? 'Untap' : 'Tap', action: () => actions.tapCards([g], !card.tapped) });
+  if (card.faceDown) {
+    // Local-only look at a face-down card, so checking your own morph doesn't
+    // force a table-wide reveal. Deliberately NOT gated on ownership — same
+    // honor system as every other verb here.
+    items.push({ label: 'Peek (only you see it)', action: () => useUI.getState().openModal({ kind: 'card', guid: g }) });
+  }
   if (pool && hasRotationStates(pool)) {
     const n = cardRotations(pool).length;
     items.push({ label: 'Turn / transform', action: () => actions.setRotIndex(g, (card.rotIndex + 1) % n) });
@@ -192,7 +198,9 @@ export const TableCard = memo(function TableCard({
         width: CARD_W,
         height: CARD_H,
         transform: `translate(${pos.x - CARD_W / 2}px, ${pos.y - CARD_H / 2}px) rotate(${angle}deg)`,
-        zIndex: dragPos || remoteDrag ? 30 : 10,
+        // Stacking: per-card z, and an in-flight drag rides above everything
+        // while keeping a multi-drag group's internal order.
+        zIndex: 10 + (card.z ?? 0) + (dragPos || remoteDrag ? 100000 : 0),
       }}
       onMouseEnter={() =>
         pool && !card.faceDown &&

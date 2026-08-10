@@ -126,6 +126,7 @@ function defaultCardState(guid: string): CardState {
     controllerId: pool?.ownerId ?? me,
     x: 0,
     y: 0,
+    z: 0,
     tapped: false,
     faceDown: false,
     faceIndex: 0,
@@ -147,6 +148,16 @@ function topOrder(zone: ZoneName, zoneOwnerId: string): number {
     if (c.zone === zone && (c.zoneOwnerId ?? c.ownerId) === zoneOwnerId) max = Math.max(max, c.order);
   }
   return max + 1;
+}
+
+/** Highest battlefield stacking value; a dropped card lands at topZ()+1. */
+function topZ(): number {
+  const { s } = ctx();
+  let max = 0;
+  for (const c of Object.values(s.cards)) {
+    if (c.zone === 'battlefield') max = Math.max(max, c.z ?? 0);
+  }
+  return max;
 }
 
 // ---------------------------------------------------------------------------
@@ -608,6 +619,8 @@ export const moveCard = undoable('move card', (guid: string, target: MoveTarget)
     controllerId,
     x: targetX,
     y: targetY,
+    // Anything placed on the battlefield lands on top of the stack.
+    z: target.zone === 'battlefield' ? topZ() + 1 : 0,
     tapped: leavingBattlefield ? false : cur.tapped,
     faceDown: target.faceDown ?? (leavingBattlefield ? false : cur.faceDown),
     rotIndex: leavingBattlefield ? 0 : cur.rotIndex,
@@ -688,7 +701,8 @@ export function reorderHand(guid: string, toIndex: number): void {
 export const setCardPosition = undoable('move card', (guid: string, x: number, y: number): void => {
   const cur = currentCard(guid);
   const controllerId = cur.zone === 'battlefield' ? controllerAt(x, y, cur.controllerId) : cur.controllerId;
-  const events: StateEvent[] = [cardEvent({ ...cur, x, y, controllerId })];
+  const z = cur.zone === 'battlefield' ? topZ() + 1 : cur.z;
+  const events: StateEvent[] = [cardEvent({ ...cur, x, y, z, controllerId })];
   const log = controlLog(guid, cur, controllerId);
   if (log) events.push(log);
   sendState(events);
@@ -696,13 +710,18 @@ export const setCardPosition = undoable('move card', (guid: string, x: number, y
 
 export const moveCardsGroup = undoable('move cards', (moves: { guid: string; x: number; y: number }[]): void => {
   const events: StateEvent[] = [];
-  for (const { guid, x, y } of moves) {
+  // The whole group rises above everything else, keeping its own internal
+  // stacking (sort by current z, then reassign contiguously above topZ).
+  const base = topZ();
+  const ordered = [...moves].sort((a, b) => (currentCard(a.guid).z ?? 0) - (currentCard(b.guid).z ?? 0));
+  ordered.forEach(({ guid, x, y }, i) => {
     const cur = currentCard(guid);
     const controllerId = cur.zone === 'battlefield' ? controllerAt(x, y, cur.controllerId) : cur.controllerId;
-    events.push(cardEvent({ ...cur, x, y, controllerId }));
+    const z = cur.zone === 'battlefield' ? base + 1 + i : cur.z;
+    events.push(cardEvent({ ...cur, x, y, z, controllerId }));
     const log = controlLog(guid, cur, controllerId);
     if (log) events.push(log);
-  }
+  });
   sendState(events);
 });
 
@@ -879,6 +898,7 @@ export const createTokens = undoable('create tokens', (tokens: PoolCard[], at: {
   const events: StateEvent[] = [
     { t: 'pool', g: gameId, by: me, seq: 1, chunk: nextPoolChunk(), nChunks: 1, cards: tokens },
   ];
+  const base = topZ();
   tokens.forEach((tok, i) => {
     const x = at.x + i * 30;
     const y = at.y + i * 12;
@@ -891,6 +911,7 @@ export const createTokens = undoable('create tokens', (tokens: PoolCard[], at: {
         zone: 'battlefield',
         x,
         y,
+        z: base + 1 + i,
       })
     );
   });
@@ -983,6 +1004,23 @@ export const takeTurn = undoable('take turn', (): void => {
   sendState([
     roomEvent({ gameId: s.room?.gameId ?? '', turnPlayerId: me, turn }),
     logEvent({ kind: 'turn', text: `${myName} took turn ${turn} (untap, upkeep, draw)` }),
+  ]);
+});
+
+/**
+ * Hand the turn marker to the next seat. Deliberately NO untap/upkeep/draw on
+ * their behalf — the recipient still takes their own turn (which won't
+ * re-bump the count, since the marker is already theirs).
+ */
+export const passTurn = undoable('pass turn', (): void => {
+  const { s, me, myName } = ctx();
+  const seated = [...s.players].sort((a, b) => a.seat - b.seat);
+  const i = seated.findIndex((p) => p.playerId === me);
+  const next = seated[(i + 1) % seated.length];
+  if (!next || next.playerId === me) return;
+  sendState([
+    roomEvent({ gameId: s.room?.gameId ?? '', turnPlayerId: next.playerId, turn: (s.room?.turn ?? 0) + 1 }),
+    logEvent({ kind: 'turn', text: `${myName} passed the turn to ${next.name}` }),
   ]);
 });
 

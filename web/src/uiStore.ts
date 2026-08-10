@@ -18,6 +18,8 @@ export type ModalState =
   | { kind: 'search'; ownerId?: string }
   | { kind: 'tokens'; at: { x: number; y: number } }
   | { kind: 'zone'; zone: 'graveyard' | 'exile' | 'command'; zoneOwnerId: string }
+  /** Local-only look at one card (e.g. peeking a face-down card). */
+  | { kind: 'card'; guid: string }
   | { kind: 'confirm'; title: string; body: string; onConfirm: () => void }
   | { kind: 'import' }
   | { kind: 'prefs' }

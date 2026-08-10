@@ -12,6 +12,14 @@ import { persisted } from '../session';
 import { CardView } from './CardView';
 
 function Backdrop({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  // Escape closes every modal, same as clicking the backdrop.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal fade-pop">{children}</div>
@@ -144,7 +152,10 @@ function SearchModal({ ownerId, onClose }: { ownerId?: string; onClose: () => vo
 
   return (
     <Backdrop onClose={close}>
-      <h3>Search {ownerName} library ({library.length})</h3>
+      <div className="modal-head">
+        <h3>Search {ownerName} library ({library.length})</h3>
+        <button className="modal-close" onClick={close} title="Close" aria-label="Close">✕</button>
+      </div>
       <input autoFocus placeholder="Filter by name…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="card-grid">
         {shown.map((guid) => {
@@ -247,6 +258,26 @@ function ZoneModal({
       <div style={{ textAlign: 'right' }}>
         <button className="primary" onClick={onClose}>Close</button>
       </div>
+    </Backdrop>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Peek at one card (face-down morphs etc.) — purely local, nothing published.
+// ---------------------------------------------------------------------------
+
+function CardPeekModal({ guid, onClose }: { guid: string; onClose: () => void }) {
+  const pool = useGame((s) => s.pool[guid]);
+  const card = useGame((s) => s.cards[guid]);
+  const name = pool?.sf?.name ?? (pool?.custom?.name as string | undefined) ?? 'card';
+  return (
+    <Backdrop onClose={onClose}>
+      <div className="modal-head">
+        <h3>Peek — {name}</h3>
+        <button className="modal-close" onClick={onClose} title="Close" aria-label="Close">✕</button>
+      </div>
+      <CardView pool={pool} rotIndex={card?.rotIndex ?? 0} large style={{ width: 300, alignSelf: 'center' }} />
+      <div className="subtle" style={{ textAlign: 'center' }}>Only you see this — the card stays face down for the table.</div>
     </Backdrop>
   );
 }
@@ -953,6 +984,8 @@ export function ModalHost() {
       return <SearchModal ownerId={modal.ownerId} onClose={close} />;
     case 'zone':
       return <ZoneModal zone={modal.zone} zoneOwnerId={modal.zoneOwnerId} onClose={close} />;
+    case 'card':
+      return <CardPeekModal guid={modal.guid} onClose={close} />;
     case 'tokens':
       return <TokenModal at={modal.at} onClose={close} />;
     case 'import':

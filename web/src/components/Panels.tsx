@@ -65,6 +65,39 @@ export function LogPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
+/**
+ * "X passed the turn to you" — shown only on the recipient's client. The
+ * room subject's seq tracks who published it, which is how a pass TO me is
+ * told apart from me taking the turn myself (and a stale marker on rejoin:
+ * the previous holder starts as null there, which skips the toast).
+ */
+export function TurnToast() {
+  const turnPlayerId = useGame((s) => s.room?.turnPlayerId ?? null);
+  const roomBy = useGame((s) => s.seqs['room']?.by);
+  const me = useGame((s) => s.session?.playerId);
+  const players = useGame((s) => s.players);
+  const [msg, setMsg] = useState<string | null>(null);
+  const prevHolder = useRef<string | null>(null);
+
+  useEffect(() => {
+    const prev = prevHolder.current;
+    prevHolder.current = turnPlayerId;
+    if (!me || turnPlayerId !== me || prev === me || prev === null) return;
+    if (!roomBy || roomBy === me) return;
+    const passer = players.find((p) => p.playerId === roomBy)?.name ?? 'Someone';
+    setMsg(`${passer} passed the turn to you`);
+    const t = setTimeout(() => setMsg(null), 4000);
+    return () => clearTimeout(t);
+  }, [turnPlayerId]);
+
+  if (!msg) return null;
+  return (
+    <div className="turn-toast">
+      <span className="turn-badge">▶ your turn</span> {msg}
+    </div>
+  );
+}
+
 /** Animated die/coin result — driven by log events so every client sees it. */
 export function DiceOverlay() {
   const log = useGame((s) => s.log);

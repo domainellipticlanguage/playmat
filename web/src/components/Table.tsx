@@ -10,7 +10,7 @@ import { Hand } from './Hand';
 import { PlayerHud } from './PlayerHud';
 import { ModalHost } from './Modals';
 import { ContextMenuHost } from './ContextMenu';
-import { DiceOverlay, HoverPreview, LogPanel } from './Panels';
+import { DiceOverlay, HoverPreview, LogPanel, TurnToast } from './Panels';
 import { TABLE, liveView, screenToWorld } from '../view';
 
 function centerDropSpot() {
@@ -89,6 +89,19 @@ export function Table() {
       window.removeEventListener('keydown', onKey);
     };
   }, [spectator]);
+
+  // Clicking a button leaves it focused, and the browser then treats a later
+  // Space/Enter as pressing it again — so Space (the pan quasimode) could
+  // draw a card via a focused "Draw" button. Drop button focus once the
+  // click has landed; keyboard (Tab) focus is untouched.
+  useEffect(() => {
+    const blurButtons = () => {
+      const el = document.activeElement;
+      if (el instanceof HTMLButtonElement) el.blur();
+    };
+    window.addEventListener('pointerup', blurButtons);
+    return () => window.removeEventListener('pointerup', blurButtons);
+  }, []);
 
   // Light the pile under a live drag, matching the hand strip's confirmation.
   // The dragging component holds pointer capture, so piles never get their own
@@ -238,12 +251,22 @@ export function Table() {
             <button className="small" disabled={!iHaveDeck} onClick={() => actions.untapAll()} title="Untap all (U)">
               Untap
             </button>
-            {/* Free-for-all by design: whoever's turn it is grabs it. "I'm
-                done" happens out of band (in person / voice), so there is no
-                pass-the-turn — the next player just takes it. */}
-            <button className="small" onClick={() => actions.takeTurn()} title="Untap, upkeep, draw — claims the turn">
-              Take turn ▸
-            </button>
+            {/* Free-for-all by design: anyone may take the turn at any time.
+                Holding it swaps the button to "Pass turn", which only moves
+                the marker — the next player still untaps/draws themself. */}
+            {room?.turnPlayerId === me ? (
+              <button
+                className="small"
+                onClick={() => actions.passTurn()}
+                title="Hand the turn to the next player (they still untap and draw themselves)"
+              >
+                Pass turn ▸
+              </button>
+            ) : (
+              <button className="small" onClick={() => actions.takeTurn()} title="Untap, upkeep, draw — claims the turn">
+                Take turn ▸
+              </button>
+            )}
             <button className="small bar-wide" onClick={() => ui.openModal({ kind: 'tokens', at: centerDropSpot() })}>
               Token
             </button>
@@ -278,6 +301,7 @@ export function Table() {
         {showLog && <LogPanel onClose={() => setShowLog(false)} />}
         <HoverPreview />
         <DiceOverlay />
+        <TurnToast />
       </div>
       <ModalHost />
       <ContextMenuHost />

@@ -412,228 +412,268 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
       <button className="hud-collapse" title="Collapse player tray" onClick={() => setCollapsed(true)}>
         ▾
       </button>
-      <div className="who">
-        <div className="name" title="Tap to collapse player tray" onClick={() => setCollapsed(true)}>
-          <span className={`presence ${presenceClass}`} title={presenceTitle}>
-            <LinkIcon slashed={presenceClass !== 'connected'} size={12} />
-          </span>
-          <span
-            className="player-chip"
-            title={`${player.name}'s color — their playmat and card rings`}
-            style={{ background: paletteColor(state.color, player.seat).hex }}
-          />
+      {/* Full-width header row: a long name overlays the piles' column instead
+          of stretching a dead-space column of its own. */}
+      <div className="name" title="Tap to collapse player tray" onClick={() => setCollapsed(true)}>
+        <span className={`presence ${presenceClass}`} title={presenceTitle}>
+          <LinkIcon slashed={presenceClass !== 'connected'} size={12} />
+        </span>
+        <span
+          className="player-chip"
+          title={`${player.name}'s color — their playmat and card rings`}
+          style={{ background: paletteColor(state.color, player.seat).hex }}
+        />
+        <span className="name-text">
           {player.name} {isMe && <span style={{ color: 'var(--ink-dim)' }}>(you)</span>}
-          {room?.turnPlayerId === pid && (
-            <span className="turn-badge" title={isMe ? 'Your turn' : `${player.name}'s turn`}>
-              ▶ turn
-            </span>
-          )}
-        </div>
-        <div className="life">
-          <div className="stack">
-            <button className="small" onClick={() => lifeAdjust(1)}>+1</button>
-            <button className="small" onClick={() => lifeAdjust(5)}>+5</button>
-          </div>
-          <div
-            className="total"
-            title="Click to set exactly"
-            onClick={() => {
-              const v = Number(prompt(`${player.name}'s life:`, String(state.life)));
-              if (Number.isFinite(v)) actions.setLife(pid, v);
-            }}
-          >
-            {state.life}
-          </div>
-          <div className="stack">
-            <button className="small" onClick={() => lifeAdjust(-1)}>−1</button>
-            <button className="small" onClick={() => lifeAdjust(-5)}>−5</button>
-          </div>
-        </div>
-        <div className="pcounters">
-          {PLAYER_COUNTERS.map((name) => {
-            const v = state.counters[name] ?? 0;
-            if (!v && name !== 'poison') return null;
-            return (
-              <span
-                key={name}
-                className="pcounter"
-                title={`${name}: click +1, right-click −1`}
-                onClick={() => actions.setPlayerCounter(pid, name, v + 1)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  actions.setPlayerCounter(pid, name, v - 1);
-                }}
-              >
-                {name === 'poison' ? '☠' : name === 'energy' ? '⚡' : '★'} {v}
-              </span>
-            );
-          })}
-          <span
-            className="pcounter"
-            title="Add energy/experience"
-            onClick={(e) => {
-              e.preventDefault();
-              useUI.getState().openCtxMenu({
-                x: e.clientX, y: e.clientY,
-                items: PLAYER_COUNTERS.map((name) => ({
-                  label: `+1 ${name}`,
-                  action: () => actions.setPlayerCounter(pid, name, (state.counters[name] ?? 0) + 1),
-                })),
-              });
-            }}
-          >
-            +
+        </span>
+        {room?.turnPlayerId === pid && (
+          <span className="turn-badge" title={isMe ? 'Your turn' : `${player.name}'s turn`}>
+            ▶ turn
           </span>
-        </div>
-        {enemyCommanders.length > 0 && (
-          <div className="cmdr-dmg">
-            {enemyCommanders.map((cmdr) => {
-              const dmg = state.commanderDamage[cmdr.guid] ?? 0;
-              const label = cmdr.sf?.name?.split(',')[0] ?? 'Commander';
-              return (
-                <div key={cmdr.guid} className="row" title={`Commander damage from ${cmdr.sf?.name} (ticks life too)`}>
-                  <button className="small" onClick={() => actions.dealCommanderDamage(pid, cmdr.guid, -1)}>−</button>
-                  <span style={{ minWidth: 18, textAlign: 'center', fontWeight: dmg >= 21 ? 'bold' : undefined, color: dmg >= 21 ? 'var(--danger)' : undefined }}>{dmg}</span>
-                  <button className="small" onClick={() => actions.dealCommanderDamage(pid, cmdr.guid, 1)}>+</button>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 90 }}>{label}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        {piles.revealed.length > 0 && (
-          <div
-            className={`revealed-strip${canActOnHand ? ' actionable' : ''}`}
-            title={
-              canActOnHand
-                ? `${player.name} is showing their hand — right-click a card to act on it`
-                : 'Revealed from hand'
-            }
-          >
-            {piles.revealed.map((c) => {
-              const p = pool[c.guid];
-              return (
-                <div
-                  key={c.guid}
-                  className="rev-card"
-                  onContextMenu={canActOnHand ? revealedHandMenu(c.guid) : undefined}
-                  onMouseEnter={() => p && useUI.getState().setHover({ pool: p, rotIndex: 0 })}
-                  onMouseLeave={() => useUI.getState().setHover(null)}
-                >
-                  <CardView pool={p} />
-                </div>
-              );
-            })}
-          </div>
         )}
       </div>
-
-      <div className="piles">
-        <div
-          className="pile"
-          data-drop={`library:${pid}`}
-          title={
-            isMe
-              ? 'Click: draw · drag top card out · right-click: library actions'
-              : `${player.name}'s library — click to search · drag top card out`
-          }
-          onClick={pileDrag.guardClick(() =>
-            isMe
-              ? actions.drawCards(1)
-              : useUI.getState().openModal({ kind: 'search', ownerId: pid })
+      <div className="hud-body">
+        <div className="who">
+          <div className="life">
+            <div className="stack">
+              <button className="small" onClick={() => lifeAdjust(-1)}>−1</button>
+              <button className="small" onClick={() => lifeAdjust(-5)}>−5</button>
+            </div>
+            <div
+              className="total"
+              title="Click to set exactly"
+              onClick={() => {
+                const v = Number(prompt(`${player.name}'s life:`, String(state.life)));
+                if (Number.isFinite(v)) actions.setLife(pid, v);
+              }}
+            >
+              {state.life}
+            </div>
+            <div className="stack">
+              <button className="small" onClick={() => lifeAdjust(1)}>+1</button>
+              <button className="small" onClick={() => lifeAdjust(5)}>+5</button>
+            </div>
+          </div>
+          <div className="pcounters">
+            {/* Standard counters first, then whatever custom ones this player has. */}
+            {[...PLAYER_COUNTERS, ...Object.keys(state.counters).filter((n) => !PLAYER_COUNTERS.includes(n))].map(
+              (name) => {
+                const v = state.counters[name] ?? 0;
+                if (!v && name !== 'poison') return null;
+                const symbol =
+                  name === 'poison' ? '☠' : name === 'energy' ? '⚡' : name === 'experience' ? '★' : '◆';
+                return (
+                  <span
+                    key={name}
+                    className="pcounter"
+                    title={`${name}: click +1, right-click −1`}
+                    onClick={() => actions.setPlayerCounter(pid, name, v + 1)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      actions.setPlayerCounter(pid, name, v - 1);
+                    }}
+                  >
+                    {symbol} {v}
+                  </span>
+                );
+              }
+            )}
+            <span
+              className="pcounter"
+              title="Add a counter (energy, experience, or your own)"
+              onClick={(e) => {
+                e.preventDefault();
+                useUI.getState().openCtxMenu({
+                  x: e.clientX, y: e.clientY,
+                  items: [
+                    ...PLAYER_COUNTERS.map((name) => ({
+                      label: `+1 ${name}`,
+                      action: () => actions.setPlayerCounter(pid, name, (state.counters[name] ?? 0) + 1),
+                    })),
+                    { sep: true, label: '' },
+                    {
+                      label: '+1 custom…',
+                      action: () => {
+                        const name = prompt('Counter name (e.g. rad, monarch, storm):')?.trim();
+                        if (name) actions.setPlayerCounter(pid, name, (state.counters[name] ?? 0) + 1);
+                      },
+                    },
+                  ],
+                });
+              }}
+            >
+              +
+            </span>
+          </div>
+          {enemyCommanders.length > 0 && (
+            <div className="cmdr-dmg">
+              {enemyCommanders.map((cmdr) => {
+                const dmg = state.commanderDamage[cmdr.guid] ?? 0;
+                const label = cmdr.sf?.name?.split(',')[0] ?? 'Commander';
+                return (
+                  <div key={cmdr.guid} className="row" title={`Commander damage from ${cmdr.sf?.name} (ticks life too)`}>
+                    <button className="small" onClick={() => actions.dealCommanderDamage(pid, cmdr.guid, -1)}>−</button>
+                    <span style={{ minWidth: 18, textAlign: 'center', fontWeight: dmg >= 21 ? 'bold' : undefined, color: dmg >= 21 ? 'var(--danger)' : undefined }}>{dmg}</span>
+                    <button className="small" onClick={() => actions.dealCommanderDamage(pid, cmdr.guid, 1)}>+</button>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 90 }}>{label}</span>
+                  </div>
+                );
+              })}
+            </div>
           )}
-          onContextMenu={libraryMenu}
-          onPointerDown={
-            libraryCount > 0
-              ? pileDrag.start(topRevealedPool ? { pool: topRevealedPool } : {}, dropFromLibrary)
-              : undefined
-          }
-          onPointerMove={pileDrag.move}
-          onPointerUp={pileDrag.end}
-          onPointerCancel={pileDrag.cancel}
-        >
-          {libraryCount > 0 && <CardView pool={topRevealedPool} />}
-          <span className="pile-count">{libraryCount}</span>
-          <span className="pile-label">library</span>
+          {piles.revealed.length > 0 && (
+            <div
+              className={`revealed-strip${canActOnHand ? ' actionable' : ''}`}
+              title={
+                canActOnHand
+                  ? `${player.name} is showing their hand — right-click a card to act on it`
+                  : 'Revealed from hand'
+              }
+            >
+              {piles.revealed.map((c) => {
+                const p = pool[c.guid];
+                return (
+                  <div
+                    key={c.guid}
+                    className="rev-card"
+                    onContextMenu={canActOnHand ? revealedHandMenu(c.guid) : undefined}
+                    onMouseEnter={() => p && useUI.getState().setHover({ pool: p, rotIndex: 0 })}
+                    onMouseLeave={() => useUI.getState().setHover(null)}
+                  >
+                    <CardView pool={p} />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        <div
-          className="pile"
-          data-drop={`graveyard:${pid}`}
-          onContextMenu={pileMenu('graveyard')}
-          onClick={pileDrag.guardClick(() =>
-            useUI.getState().openModal({ kind: 'zone', zone: 'graveyard', zoneOwnerId: pid })
-          )}
-          title="Graveyard (click to expand · drag top card out)"
-          onPointerDown={
-            piles.gy[0]
-              ? pileDrag.start(
-                  { pool: pool[piles.gy[0].guid], rotIndex: piles.gy[0].rotIndex },
-                  dropFromPileCard(piles.gy[0].guid)
-                )
-              : undefined
-          }
-          onPointerMove={pileDrag.move}
-          onPointerUp={pileDrag.end}
-          onPointerCancel={pileDrag.cancel}
-        >
-          {piles.gy[0] && <CardView pool={pool[piles.gy[0].guid]} rotIndex={piles.gy[0].rotIndex} />}
-          <span className="pile-count">{piles.gy.length}</span>
-          <span className="pile-label">grave</span>
-        </div>
+        <div className="piles">
+          <div
+            className="pile"
+            data-drop={`library:${pid}`}
+            title={
+              isMe
+                ? 'Click: draw · drag top card out · right-click: library actions'
+                : `${player.name}'s library — click to search · drag top card out`
+            }
+            onClick={pileDrag.guardClick(() =>
+              isMe
+                ? actions.drawCards(1)
+                : useUI.getState().openModal({ kind: 'search', ownerId: pid })
+            )}
+            onContextMenu={libraryMenu}
+            onPointerDown={
+              libraryCount > 0
+                ? pileDrag.start(topRevealedPool ? { pool: topRevealedPool } : {}, dropFromLibrary)
+                : undefined
+            }
+            onPointerMove={pileDrag.move}
+            onPointerUp={pileDrag.end}
+            onPointerCancel={pileDrag.cancel}
+            onMouseEnter={() =>
+              topRevealedPool && useUI.getState().setHover({ pool: topRevealedPool, rotIndex: 0 })
+            }
+            onMouseLeave={() => useUI.getState().setHover(null)}
+          >
+            {libraryCount > 0 && <CardView pool={topRevealedPool} />}
+            <span className="pile-count">{libraryCount}</span>
+            <span className="pile-label">library</span>
+          </div>
 
-        <div
-          className="pile"
-          data-drop={`exile:${pid}`}
-          onContextMenu={pileMenu('exile')}
-          onClick={pileDrag.guardClick(() =>
-            useUI.getState().openModal({ kind: 'zone', zone: 'exile', zoneOwnerId: pid })
-          )}
-          title="Exile (click to expand · drag top card out)"
-          onPointerDown={
-            piles.exile[0]
-              ? pileDrag.start(
-                  { pool: pool[piles.exile[0].guid], rotIndex: piles.exile[0].rotIndex },
-                  dropFromPileCard(piles.exile[0].guid)
-                )
-              : undefined
-          }
-          onPointerMove={pileDrag.move}
-          onPointerUp={pileDrag.end}
-          onPointerCancel={pileDrag.cancel}
-        >
-          {piles.exile[0] && <CardView pool={pool[piles.exile[0].guid]} rotIndex={piles.exile[0].rotIndex} />}
-          <span className="pile-count">{piles.exile.length}</span>
-          <span className="pile-label">exile</span>
-        </div>
+          <div
+            className="pile"
+            data-drop={`graveyard:${pid}`}
+            onContextMenu={pileMenu('graveyard')}
+            onClick={pileDrag.guardClick(() =>
+              useUI.getState().openModal({ kind: 'zone', zone: 'graveyard', zoneOwnerId: pid })
+            )}
+            title="Graveyard (click to expand · drag top card out)"
+            onPointerDown={
+              piles.gy[0]
+                ? pileDrag.start(
+                    { pool: pool[piles.gy[0].guid], rotIndex: piles.gy[0].rotIndex },
+                    dropFromPileCard(piles.gy[0].guid)
+                  )
+                : undefined
+            }
+            onPointerMove={pileDrag.move}
+            onPointerUp={pileDrag.end}
+            onPointerCancel={pileDrag.cancel}
+            onMouseEnter={() =>
+              piles.gy[0] && pool[piles.gy[0].guid] &&
+              useUI.getState().setHover({ pool: pool[piles.gy[0].guid], rotIndex: piles.gy[0].rotIndex })
+            }
+            onMouseLeave={() => useUI.getState().setHover(null)}
+          >
+            {piles.gy[0] && <CardView pool={pool[piles.gy[0].guid]} rotIndex={piles.gy[0].rotIndex} />}
+            <span className="pile-count">{piles.gy.length}</span>
+            <span className="pile-label">grave</span>
+          </div>
 
-        <div
-          className="pile"
-          data-drop={`command:${pid}`}
-          onContextMenu={pileMenu('command')}
-          onClick={pileDrag.guardClick(() =>
-            useUI.getState().openModal({ kind: 'zone', zone: 'command', zoneOwnerId: pid })
-          )}
-          title="Command zone (drag commander to battlefield to cast)"
-          onPointerDown={
-            piles.command[0]
-              ? pileDrag.start({ pool: pool[piles.command[0].guid] }, dropFromPileCard(piles.command[0].guid))
-              : undefined
-          }
-          onPointerMove={pileDrag.move}
-          onPointerUp={pileDrag.end}
-          onPointerCancel={pileDrag.cancel}
-        >
-          {piles.command[0] && <CardView pool={pool[piles.command[0].guid]} />}
-          <span className="pile-count">{piles.command.length}</span>
-          <span className="pile-label">command</span>
-        </div>
+          <div
+            className="pile"
+            data-drop={`exile:${pid}`}
+            onContextMenu={pileMenu('exile')}
+            onClick={pileDrag.guardClick(() =>
+              useUI.getState().openModal({ kind: 'zone', zone: 'exile', zoneOwnerId: pid })
+            )}
+            title="Exile (click to expand · drag top card out)"
+            onPointerDown={
+              piles.exile[0]
+                ? pileDrag.start(
+                    { pool: pool[piles.exile[0].guid], rotIndex: piles.exile[0].rotIndex },
+                    dropFromPileCard(piles.exile[0].guid)
+                  )
+                : undefined
+            }
+            onPointerMove={pileDrag.move}
+            onPointerUp={pileDrag.end}
+            onPointerCancel={pileDrag.cancel}
+            onMouseEnter={() =>
+              piles.exile[0] && pool[piles.exile[0].guid] &&
+              useUI.getState().setHover({ pool: pool[piles.exile[0].guid], rotIndex: piles.exile[0].rotIndex })
+            }
+            onMouseLeave={() => useUI.getState().setHover(null)}
+          >
+            {piles.exile[0] && <CardView pool={pool[piles.exile[0].guid]} rotIndex={piles.exile[0].rotIndex} />}
+            <span className="pile-count">{piles.exile.length}</span>
+            <span className="pile-label">exile</span>
+          </div>
 
-        <div className="pile" data-drop={`hand:${pid}`} title={`${player.name}'s hand`}
-          style={{ borderStyle: 'solid' }}>
-          <span className="pile-count">{handCount}</span>
-          <span className="pile-label">hand</span>
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, color: 'var(--ink-dim)' }}>🂠</div>
+          <div
+            className="pile"
+            data-drop={`command:${pid}`}
+            onContextMenu={pileMenu('command')}
+            onClick={pileDrag.guardClick(() =>
+              useUI.getState().openModal({ kind: 'zone', zone: 'command', zoneOwnerId: pid })
+            )}
+            title="Command zone (drag commander to battlefield to cast)"
+            onPointerDown={
+              piles.command[0]
+                ? pileDrag.start({ pool: pool[piles.command[0].guid] }, dropFromPileCard(piles.command[0].guid))
+                : undefined
+            }
+            onPointerMove={pileDrag.move}
+            onPointerUp={pileDrag.end}
+            onPointerCancel={pileDrag.cancel}
+            onMouseEnter={() =>
+              piles.command[0] && pool[piles.command[0].guid] &&
+              useUI.getState().setHover({ pool: pool[piles.command[0].guid], rotIndex: 0 })
+            }
+            onMouseLeave={() => useUI.getState().setHover(null)}
+          >
+            {piles.command[0] && <CardView pool={pool[piles.command[0].guid]} />}
+            <span className="pile-count">{piles.command.length}</span>
+            <span className="pile-label">command</span>
+          </div>
+
+          <div className="pile" data-drop={`hand:${pid}`} title={`${player.name}'s hand`}
+            style={{ borderStyle: 'solid' }}>
+            <span className="pile-count">{handCount}</span>
+            <span className="pile-label">hand</span>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, color: 'var(--ink-dim)' }}>🂠</div>
+          </div>
         </div>
       </div>
       {pileDrag.ghost &&

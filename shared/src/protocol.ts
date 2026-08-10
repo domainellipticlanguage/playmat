@@ -38,6 +38,12 @@ export interface CardState {
   /** Battlefield position in global table coordinates (seat 0 south). */
   x: number;
   y: number;
+  /**
+   * Battlefield stacking order (higher = on top). Every drag/play raises the
+   * card above everything else (max+1), so "put the aura on the creature"
+   * just works. Optional so snapshots written before this field still load.
+   */
+  z?: number;
   tapped: boolean;
   faceDown: boolean;
   /** Which face is showing for multi-face cards (0 = front). */

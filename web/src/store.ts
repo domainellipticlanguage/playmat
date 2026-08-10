@@ -129,6 +129,16 @@ export function cardName(pool: Record<string, PoolCard>, guid: string, faceDown:
   return p?.sf?.name ?? (p?.custom?.name as string | undefined) ?? 'a card';
 }
 
+/**
+ * Keep the PREVIOUS object when the incoming one is content-identical, so
+ * React.memo'd components skip re-rendering. Matters most for snapshot
+ * refetches (reconnects), which otherwise mint fresh objects for every card,
+ * pool entry, and player — repainting the entire board in one frame.
+ */
+function keepIfEqual<T>(prev: T | undefined, next: T): T {
+  return prev !== undefined && JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+}
+
 export const useGame = create<GameStore>((set, get) => ({
   session: null,
   connStatus: 'idle',
@@ -187,7 +197,8 @@ export const useGame = create<GameStore>((set, get) => ({
         const prev = state.cards[ev.card.guid];
         const cards = { ...state.cards };
         if (ev.card.del) delete cards[ev.card.guid];
-        else cards[ev.card.guid] = ev.card;
+        // Seq-bump republishes (reassertCards) keep the old object identity.
+        else cards[ev.card.guid] = keepIfEqual(prev, ev.card);
         patch.cards = cards;
 
         // The authoritative position has landed: retire any drag ghost so the
@@ -273,7 +284,10 @@ export const useGame = create<GameStore>((set, get) => ({
             ];
           }
         }
-        patch.playerStates = { ...state.playerStates, [ev.player.playerId]: ev.player };
+        patch.playerStates = {
+          ...state.playerStates,
+          [ev.player.playerId]: keepIfEqual(state.playerStates[ev.player.playerId], ev.player),
+        };
         break;
       case 'pool': {
         // New import epoch replaces the owner's previous non-token pool;
@@ -351,12 +365,15 @@ export const useGame = create<GameStore>((set, get) => ({
 
   applySnapshot: (snap) => {
     const state = get();
+    // Reuse existing objects wherever the snapshot didn't change them —
+    // otherwise a reconnect refetch re-renders every card on the table at
+    // once (the "whole board blinks" jank).
     const playerStates: Record<string, PlayerState> = {};
-    for (const ps of snap.playerStates) playerStates[ps.playerId] = ps;
+    for (const ps of snap.playerStates) playerStates[ps.playerId] = keepIfEqual(state.playerStates[ps.playerId], ps);
     const pool: Record<string, PoolCard> = {};
-    for (const c of snap.pools) pool[c.guid] = c;
+    for (const c of snap.pools) pool[c.guid] = keepIfEqual(state.pool[c.guid], c);
     const cards: Record<string, CardState> = {};
-    for (const c of snap.cards) cards[c.guid] = c;
+    for (const c of snap.cards) cards[c.guid] = keepIfEqual(state.cards[c.guid], c);
 
     // Hidden zones: prefer whichever copy (server vs local) is fresher.
     let hidden = state.hidden;
@@ -371,9 +388,9 @@ export const useGame = create<GameStore>((set, get) => ({
     }
 
     set({
-      players: snap.players,
+      players: keepIfEqual(state.players, snap.players),
       playerStates,
-      room: snap.room,
+      room: keepIfEqual(state.room ?? undefined, snap.room) ?? null,
       pool,
       cards,
       seqs: snap.seqs,
