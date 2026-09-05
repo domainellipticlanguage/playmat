@@ -21,6 +21,9 @@ import {
   assembleSnapshot,
   normalizeRoomCode,
   MAX_EVENTS_PER_PUBLISH,
+  archidektDeckApiUrl,
+  archidektProxyError,
+  type ArchidektProxyFailure,
 } from '@playmat/shared';
 import { signRoomToken, verifyRoomToken, type RoomClaims } from '@playmat/shared/src/jwt';
 import { createRoom, getRoom, joinRoom, listRooms, persistStateEvent, publicSeats, type Room } from './store';
@@ -251,19 +254,27 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     }
   }
 
-  // GET /api/archidekt/{deckId} — CORS proxy with a courteous User-Agent
+  // GET /api/archidekt/{deckId} — CORS proxy with a courteous User-Agent.
+  // Same contract as the Lambda: upstream failures come back as a structured
+  // 502 (see shared/archidektProxy.ts), never as the raw upstream status.
   if (req.method === 'GET' && parts[1] === 'archidekt' && parts[2]) {
-    const deckId = parts[2].replace(/[^0-9]/g, '');
+    let upstream: Response;
     try {
-      const upstream = await fetch(`https://archidekt.com/api/decks/${deckId}/`, {
+      upstream = await fetch(archidektDeckApiUrl(parts[2]), {
         headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
       });
-      const text = await upstream.text();
-      res.writeHead(upstream.status, { 'Content-Type': 'application/json', ...CORS_HEADERS });
-      res.end(text);
     } catch (err) {
-      send(res, 502, { error: `Archidekt fetch failed: ${String(err)}` });
+      const failure: ArchidektProxyFailure = { error: 'archidekt_unreachable', detail: String(err) };
+      send(res, 502, failure);
+      return;
     }
+    const text = await upstream.text();
+    if (!upstream.ok) {
+      send(res, 502, archidektProxyError(upstream.status, upstream.headers.get('content-type'), text));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+    res.end(text);
     return;
   }
 

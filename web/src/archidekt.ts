@@ -5,6 +5,7 @@
  * so resolution afterwards is exact, and the "Commander" category gives us
  * D-5 inference for free.
  */
+import type { ArchidektProxyFailure } from '@playmat/shared';
 import { config } from './config';
 
 export interface ArchidektEntry {
@@ -19,9 +20,32 @@ export function parseArchidektUrl(url: string): string | null {
   return m ? m[1] : null;
 }
 
+/**
+ * Turn a proxy failure into something the user can act on. The important
+ * case: Archidekt's edge blocks cloud-hosted IPs, so the deployed proxy gets a
+ * 403 for *every* deck — the fix on the user's side is Archidekt's own text
+ * export pasted into the decklist box, which the import modal already accepts.
+ */
+export function describeArchidektFailure(status: number, failure?: Partial<ArchidektProxyFailure>): string {
+  const upstream = failure?.upstreamStatus;
+  if (upstream === 403 && failure?.detail) {
+    return `Archidekt refused the deck (${failure.detail}). If it's private, make it public or unlisted — or paste its exported decklist below.`;
+  }
+  if (upstream === 403) {
+    return "Archidekt is blocking requests from Playmat's server. Workaround: on Archidekt open the deck → Export → copy the text list, paste it below, and hit Resolve.";
+  }
+  if (upstream === 404) return 'Archidekt has no deck at that URL — check the link.';
+  if (upstream) return `Archidekt answered ${upstream}; try again in a moment, or paste the exported decklist below.`;
+  if (failure?.error === 'archidekt_unreachable') return 'Could not reach Archidekt; try again in a moment, or paste the exported decklist below.';
+  return `Archidekt fetch failed (${status}).`;
+}
+
 export async function fetchArchidektDeck(deckId: string): Promise<{ name: string; entries: ArchidektEntry[] }> {
   const res = await fetch(`${config.apiBase}/archidekt/${deckId}`);
-  if (!res.ok) throw new Error(`Archidekt fetch failed (${res.status})`);
+  if (!res.ok) {
+    const failure = (await res.json().catch(() => undefined)) as Partial<ArchidektProxyFailure> | undefined;
+    throw new Error(describeArchidektFailure(res.status, failure));
+  }
   const deck = await res.json();
 
   // Categories marked premier=false + includedInDeck=false (Maybeboard,

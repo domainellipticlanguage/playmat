@@ -29,6 +29,9 @@ import {
   newRoomCode,
   normalizeRoomCode,
   MAX_SEATS,
+  archidektDeckApiUrl,
+  archidektProxyError,
+  type ArchidektProxyFailure,
 } from '../../shared/src/index';
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
@@ -350,16 +353,26 @@ async function putHidden(roomCode: string, claims: RoomClaims, body: any): Promi
 }
 
 async function archidektProxy(deckId: string): Promise<LambdaFunctionURLResult> {
-  const id = deckId.replace(/[^0-9]/g, '');
-  const res = await fetch(`https://archidekt.com/api/decks/${id}/`, {
-    headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
-  });
+  let res: Response;
+  try {
+    res = await fetch(archidektDeckApiUrl(deckId), {
+      headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+    });
+  } catch (err) {
+    console.error('archidekt fetch threw', err);
+    const failure: ArchidektProxyFailure = { error: 'archidekt_unreachable' };
+    return json(502, failure);
+  }
   const text = await res.text();
-  return {
-    statusCode: res.status,
-    headers: { 'Content-Type': 'application/json' },
-    body: text,
-  };
+  if (!res.ok) {
+    // Structured failure, never the raw upstream status: Archidekt's edge
+    // 403s cloud IPs (this Lambda included) with an HTML page, and a bare 403
+    // from our own API reads as an auth failure to the client.
+    const failure = archidektProxyError(res.status, res.headers.get('content-type'), text);
+    console.warn('archidekt upstream failure', JSON.stringify(failure));
+    return json(502, failure);
+  }
+  return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: text };
 }
 
 // ---------------------------------------------------------------------------
