@@ -81,8 +81,8 @@ The JWT signing key is generated on first synth into `infra/.jwt-key`
 Rooms (create/join/rejoin with reserved seats/spectators for 5th+), decklist
 paste + Archidekt URL import (commander inference from `// Commander`, `*CMDR*`,
 `[Commander]` category, or manual pick; a clean resolve auto-chooses the deck;
-note Archidekt's edge currently 403s cloud-hosted IPs, so the deployed proxy
-gets refused and the app points you to Archidekt's text export instead),
+the fetch goes through a small Cloudflare Worker because Archidekt's edge
+403s AWS IPs, with a paste-the-export fallback if that ever fails),
 saved decks with commander-art thumbnails, Scryfall resolution via
 `/cards/collection` (75 cards/request, client-side), opening-hand modal with
 London mulligan (keep/mull, bottom the extras), all six zones per player,

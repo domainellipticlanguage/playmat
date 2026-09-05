@@ -174,6 +174,18 @@ check('spectator state publish rejected', specResult.type === 'publish_error');
 const badJoin = await fetch(`${API}/rooms/${alice.roomCode}/snapshot`, { headers: { Authorization: 'Bearer nope' } });
 check('bad token rejected on snapshot', badJoin.status === 401);
 
+// Edge Worker (Archidekt proxy on Cloudflare — Archidekt 403s AWS egress).
+const WORKER = 'https://playmat.domainellipticlanguage.workers.dev';
+const wOk = await fetch(`${WORKER}/archidekt/1`, { headers: { Origin: outputs.WebUrl } });
+const wDeck = await wOk.json().catch(() => ({}));
+check(`worker proxies Archidekt deck (${wOk.status}, "${wDeck.name ?? '?'}")`, wOk.status === 200 && wDeck.id === 1);
+check('worker sets CORS for the site origin', wOk.headers.get('access-control-allow-origin') === outputs.WebUrl);
+const wNoOrigin = await fetch(`${WORKER}/archidekt/1`);
+check('worker refuses callers without our Origin', wNoOrigin.status === 403);
+const wMissing = await fetch(`${WORKER}/archidekt/999999999999`, { headers: { Origin: outputs.WebUrl } });
+const wMissingBody = await wMissing.json().catch(() => ({}));
+check('worker maps upstream 404 to structured 502', wMissing.status === 502 && wMissingBody.upstreamStatus === 404);
+
 a.ws.close(); b.ws.close(); s.ws.close();
 
 console.log(failures === 0 ? '\nALL AWS SMOKE TESTS PASSED' : `\n${failures} FAILURES`);

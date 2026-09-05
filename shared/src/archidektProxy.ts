@@ -13,9 +13,12 @@
 export const archidektDeckApiUrl = (deckId: string): string =>
   `https://archidekt.com/api/decks/${deckId.replace(/[^0-9]/g, '')}/`;
 
-/** Any failure body the proxy can answer with (always alongside a 502). */
+/**
+ * Any failure body a proxy can answer with: 502 for upstream trouble, 429 when
+ * the Worker throttles a client, 403 when the Worker refuses the Origin.
+ */
 export interface ArchidektProxyFailure {
-  error: 'archidekt_upstream' | 'archidekt_unreachable';
+  error: 'archidekt_upstream' | 'archidekt_unreachable' | 'rate_limited' | 'origin_not_allowed';
   upstreamStatus?: number;
   detail?: string;
 }

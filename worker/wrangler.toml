@@ -1,0 +1,28 @@
+# Playmat edge Worker — served at https://playmat.domainellipticlanguage.workers.dev
+# (the Worker's name is the first label under the account's workers.dev subdomain).
+#
+# Why this exists: Archidekt's edge (Google Cloud Armor) 403s requests from
+# public-cloud IP ranges, which includes the room Lambda on AWS, but not
+# Cloudflare's egress (verified 2026-09-04). So deck fetches go browser →
+# this Worker → Archidekt. Deploy with `npm run deploy -w worker` (needs
+# `wrangler login`); scripts/deploy.mjs runs it as part of the full deploy.
+name = "playmat"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+workers_dev = true
+preview_urls = false
+
+[vars]
+# Origins allowed to call this Worker from a browser (comma-separated).
+ALLOWED_ORIGINS = "https://playmat.domainellipticlanguage.com,https://dznrduxio4m77.cloudfront.net,http://localhost:5173"
+
+# Coarse per-IP backstop. Cloudflare documents this binding as permissive and
+# eventually consistent (we measured it allowing 10x the setting), so the
+# Worker also keeps an exact in-memory window — see `throttled` in src/index.ts.
+[[ratelimits]]
+name = "ARCHIDEKT_RL"
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 30
+  period = 60

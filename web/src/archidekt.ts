@@ -1,9 +1,10 @@
 /**
- * Archidekt deck import (D-2). Their API blocks browser CORS, so we go via
- * the room API proxy (local-server in dev, the Lambda in prod), which also
- * sets the courteous User-Agent. Card identity comes back as Scryfall uids,
- * so resolution afterwards is exact, and the "Commander" category gives us
- * D-5 inference for free.
+ * Archidekt deck import (D-2). Their API blocks browser CORS, so we go via a
+ * proxy that sets the courteous User-Agent: local-server in dev, and in prod
+ * the Cloudflare Worker (worker/) — Archidekt's edge 403s AWS egress, so the
+ * Lambda's /archidekt route can't be used from the live site. Card identity
+ * comes back as Scryfall uids, so resolution afterwards is exact, and the
+ * "Commander" category gives us D-5 inference for free.
  */
 import type { ArchidektProxyFailure } from '@playmat/shared';
 import { config } from './config';
@@ -37,11 +38,12 @@ export function describeArchidektFailure(status: number, failure?: Partial<Archi
   if (upstream === 404) return 'Archidekt has no deck at that URL — check the link.';
   if (upstream) return `Archidekt answered ${upstream}; try again in a moment, or paste the exported decklist below.`;
   if (failure?.error === 'archidekt_unreachable') return 'Could not reach Archidekt; try again in a moment, or paste the exported decklist below.';
+  if (failure?.error === 'rate_limited') return 'Too many deck fetches in the last minute — wait a bit and try again, or paste the exported decklist below.';
   return `Archidekt fetch failed (${status}).`;
 }
 
 export async function fetchArchidektDeck(deckId: string): Promise<{ name: string; entries: ArchidektEntry[] }> {
-  const res = await fetch(`${config.apiBase}/archidekt/${deckId}`);
+  const res = await fetch(`${config.archidektBase}/${deckId}`);
   if (!res.ok) {
     const failure = (await res.json().catch(() => undefined)) as Partial<ArchidektProxyFailure> | undefined;
     throw new Error(describeArchidektFailure(res.status, failure));

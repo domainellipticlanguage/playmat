@@ -1,6 +1,7 @@
 node_modules/
 dist/
 cdk.out/
+.wrangler/
 *.log
 .DS_Store
 infra/.jwt-key
