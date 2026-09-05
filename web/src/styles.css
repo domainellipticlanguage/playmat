@@ -69,6 +69,52 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   background:
     radial-gradient(ellipse at 50% -20%, rgba(212, 168, 67, 0.15), transparent 60%),
     var(--bg);
+  /* Own stacking context so the motes layer (z-index -1) sits between this
+     gradient and the content instead of vanishing behind the page. */
+  position: relative;
+  isolation: isolate;
+}
+
+/* Motes of light (Lobby.tsx <Motes/>): the outer span rises and fades
+   (translateY + opacity), the inner <i> sways (translateX) — two transforms
+   need two elements. Per-mote variety comes in as custom properties. */
+.motes {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.mote {
+  position: absolute;
+  left: var(--x);
+  bottom: -6px;
+  opacity: 0;
+  animation: mote-rise var(--dur) linear var(--delay) infinite;
+  will-change: transform, opacity;
+}
+.mote i {
+  display: block;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: var(--tint);
+  box-shadow: 0 0 6px 1px var(--accent-soft);
+  animation: mote-sway var(--sway-dur) ease-in-out var(--delay) infinite alternate;
+  will-change: transform;
+}
+@keyframes mote-rise {
+  0%   { transform: translateY(0); opacity: 0; }
+  12%  { opacity: var(--peak); }
+  55%  { opacity: var(--peak); }
+  100% { transform: translateY(calc(-1 * var(--rise))); opacity: 0; }
+}
+@keyframes mote-sway {
+  from { transform: translateX(0); }
+  to   { transform: translateX(var(--sway)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .motes { display: none; }
 }
 .lobby h1 {
   margin: 0;
