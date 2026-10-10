@@ -2,7 +2,8 @@
 /**
  * Full deploy: CDK stack → Cloudflare Worker → build web with the deployed
  * endpoints → S3 sync → CloudFront invalidation. Idempotent; run
- * `npm run deploy` any time. The Worker step needs `wrangler login`.
+ * `npm run deploy` any time. The Worker step needs `wrangler login`;
+ * SKIP_WORKER=1 skips redeploying it (still health-checks the live one).
  */
 import { execSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
@@ -24,7 +25,8 @@ console.log('\nStack outputs:', outputs);
 // 2. Edge Worker (Archidekt proxy). URL = <worker name>.<account subdomain>.workers.dev;
 //    both halves are fixed (worker/wrangler.toml, Cloudflare account), so it's a constant.
 const WORKER_URL = 'https://playmat.domainellipticlanguage.workers.dev';
-run('npx wrangler deploy', join(root, 'worker'));
+if (process.env.SKIP_WORKER) console.log('\nSKIP_WORKER set — not redeploying the Worker');
+else run('npx wrangler deploy', join(root, 'worker'));
 {
   const res = await fetch(`${WORKER_URL}/archidekt/1`, { headers: { Origin: outputs.WebUrl } });
   const body = await res.json().catch(() => ({}));
