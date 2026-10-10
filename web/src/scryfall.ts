@@ -4,7 +4,7 @@
  * Scryfall supports CORS for exactly this kind of client-side use.
  */
 import type { DeckEntry, PoolCard, PoolFace } from '@playmat/shared';
-import { newGuid } from '@playmat/shared';
+import { cardNameKey, frontFaceName, newGuid } from '@playmat/shared';
 
 const COLLECTION_URL = 'https://api.scryfall.com/cards/collection';
 
@@ -12,6 +12,8 @@ export interface ScryfallCard {
   id: string;
   name: string;
   layout: string;
+  set?: string;
+  collector_number?: string;
   type_line?: string;
   oracle_text?: string;
   mana_cost?: string;
@@ -106,30 +108,63 @@ async function fetchCollection(identifiers: Record<string, string>[]): Promise<{
   return res.json();
 }
 
-/** Resolve deck entries by name into per-physical-card PoolCards. */
-export async function resolveDeckByNames(entries: DeckEntry[], ownerId: string): Promise<ResolvedDeck> {
-  const uniqueNames = [...new Set(entries.map((e) => e.name))];
-  const byName = new Map<string, ScryfallCard>();
-  const notFound: string[] = [];
+/** Every name a card answers to: full name plus each face's name. */
+function nameKeysOf(card: ScryfallCard): string[] {
+  return [card.name, ...(card.card_faces ?? []).map((f) => f.name)].map(cardNameKey);
+}
 
-  for (let i = 0; i < uniqueNames.length; i += 75) {
-    const batch = uniqueNames.slice(i, i + 75);
-    const result = await fetchCollection(batch.map((name) => ({ name })));
-    for (const card of result.data) byName.set(card.name.toLowerCase(), card);
-    for (const miss of result.not_found ?? []) notFound.push(String(miss.name));
-    if (i + 75 < uniqueNames.length) await new Promise((r) => setTimeout(r, 120));
+const printingKey = (set: string, cn: string) => `${set.toLowerCase()}:${cn.toLowerCase()}`;
+
+/**
+ * Resolve deck entries into per-physical-card PoolCards.
+ *
+ * Two passes: entries that carry a printing (set + collector number, as in
+ * Moxfield/Archidekt/Arena exports) are looked up by printing first so the
+ * art matches; whatever that misses — or resolves to a card whose name
+ * disagrees, e.g. an Arena-only set code — falls back to lookup by name.
+ * Name lookup sends the FRONT face: Scryfall's collection endpoint resolves
+ * "Fire" or "Valki, God of Lies" but 404s "Fire // Ice" and full DFC names.
+ */
+export async function resolveDeckByNames(entries: DeckEntry[], ownerId: string): Promise<ResolvedDeck> {
+  const byPrinting = new Map<string, ScryfallCard>();
+  const byName = new Map<string, ScryfallCard>();
+  const matches = (card: ScryfallCard, name: string) => nameKeysOf(card).includes(cardNameKey(name));
+
+  const printings = [...new Map(
+    entries.filter((e) => e.set && e.cn).map((e) => [printingKey(e.set!, e.cn!), { set: e.set!, collector_number: e.cn! }])
+  ).values()];
+  for (let i = 0; i < printings.length; i += 75) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 120));
+    const result = await fetchCollection(printings.slice(i, i + 75));
+    for (const card of result.data) byPrinting.set(printingKey(card.set!, card.collector_number!), card);
+  }
+  const printingFor = (e: DeckEntry) => {
+    const card = e.set && e.cn ? byPrinting.get(printingKey(e.set, e.cn)) : undefined;
+    return card && matches(card, e.name) ? card : undefined;
+  };
+
+  const nameFor = (e: DeckEntry) => byName.get(cardNameKey(e.name)) ?? byName.get(cardNameKey(frontFaceName(e.name)));
+  const lookUpNames = async (names: string[]) => {
+    for (let i = 0; i < names.length; i += 75) {
+      if (i > 0 || printings.length) await new Promise((r) => setTimeout(r, 120));
+      const result = await fetchCollection(names.slice(i, i + 75).map((name) => ({ name })));
+      for (const card of result.data) for (const key of nameKeysOf(card)) if (!byName.has(key)) byName.set(key, card);
+    }
+  };
+  const unresolved = () => entries.filter((e) => !printingFor(e) && !nameFor(e));
+  await lookUpNames([...new Set(unresolved().map((e) => frontFaceName(e.name)))]);
+  // Scryfall isn't uniform: a few composites (Unfinity's "Who // What // When
+  // // Where // Why") resolve ONLY by full name. Retry the composite misses.
+  const fullNameRetries = [...new Set(unresolved().map((e) => e.name).filter((n) => n !== frontFaceName(n)))];
+  if (fullNameRetries.length) {
+    await new Promise((r) => setTimeout(r, 120));
+    await lookUpNames(fullNameRetries);
   }
 
   const cards: PoolCard[] = [];
+  const notFound: string[] = [];
   for (const entry of entries) {
-    // Scryfall returns canonical names; match loosely (front-face prefix too).
-    const key = entry.name.toLowerCase();
-    let card = byName.get(key);
-    if (!card) {
-      card = [...byName.values()].find(
-        (c) => c.name.toLowerCase().startsWith(key) || key.startsWith(c.name.toLowerCase().split(' // ')[0])
-      );
-    }
+    const card = printingFor(entry) ?? nameFor(entry);
     if (!card) {
       if (!notFound.includes(entry.name)) notFound.push(entry.name);
       continue;

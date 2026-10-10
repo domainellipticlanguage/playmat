@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PoolCard } from '@playmat/shared';
 import { newGuid, parseDecklist } from '@playmat/shared';
 import { useGame } from '../store';
@@ -491,6 +491,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
   const [commanderPick, setCommanderPick] = useState<string | null>(null);
   const [deckName, setDeckName] = useState<string | null>(null);
   const [savedDecks, setSavedDecks] = useState(() => persisted.listDecks());
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const me = session?.playerId ?? '';
 
@@ -503,7 +504,7 @@ function ImportModal({ onClose }: { onClose: () => void }) {
     onClose();
   };
 
-  const resolveText = async () => {
+  const resolveText = async (text: string) => {
     setBusy(true);
     setProblems([]);
     setStatus('Parsing decklist…');
@@ -545,13 +546,15 @@ function ImportModal({ onClose }: { onClose: () => void }) {
       // re-resolvable by name if tweaked.
       const commanders = deck.entries.filter((e) => e.commander);
       const rest = deck.entries.filter((e) => !e.commander);
+      const line = (e: (typeof deck.entries)[number]) =>
+        `${e.count}x ${e.name}${e.set && e.cn ? ` (${e.set}) ${e.cn}` : ''}`;
       const lines: string[] = [];
       if (commanders.length) {
         lines.push('// Commander');
-        for (const e of commanders) lines.push(`${e.count}x ${e.name}`);
+        for (const e of commanders) lines.push(line(e));
         lines.push('', '// Deck');
       }
-      for (const e of rest) lines.push(`${e.count}x ${e.name}`);
+      for (const e of rest) lines.push(line(e));
       const listText = lines.join('\n');
       setText(listText);
 
@@ -683,9 +686,26 @@ function ImportModal({ onClose }: { onClose: () => void }) {
         style={{ fontFamily: 'monospace', fontSize: 13 }}
       />
       <div style={{ display: 'flex', gap: 10 }}>
-        <button className="primary" disabled={busy || !text.trim()} onClick={() => void resolveText()}>
+        <button className="primary" disabled={busy || !text.trim()} onClick={() => void resolveText(text)}>
           {busy ? 'Working…' : 'Resolve decklist'}
         </button>
+        <button disabled={busy} onClick={() => fileRef.current?.click()} title="MTGO .dek, Cockatrice .cod, Forge/XMage .dck, or a .txt export">
+          Load file…
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".txt,.dek,.dck,.cod,text/plain"
+          style={{ display: 'none' }}
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (!file) return;
+            const contents = await file.text();
+            setText(contents);
+            void resolveText(contents);
+          }}
+        />
         {status && <span className="subtle" style={{ alignSelf: 'center' }}>{status}</span>}
       </div>
       {problems.length > 0 && (

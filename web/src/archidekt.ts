@@ -14,6 +14,9 @@ export interface ArchidektEntry {
   count: number;
   commander: boolean;
   name: string;
+  /** Printing, so the mirrored text list re-resolves to the same card. */
+  set?: string;
+  cn?: string;
 }
 
 export function parseArchidektUrl(url: string): string | null {
@@ -70,6 +73,8 @@ export async function fetchArchidektDeck(deckId: string): Promise<{ name: string
       count: item.quantity ?? 1,
       commander: categories.some((c) => c.startsWith('commander')),
       name: item.card?.oracleCard?.name ?? 'Unknown',
+      set: item.card?.edition?.editioncode || undefined,
+      cn: item.card?.collectorNumber || undefined,
     });
   }
   return { name: deck.name ?? `Archidekt deck ${deckId}`, entries };
