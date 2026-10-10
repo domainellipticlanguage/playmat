@@ -12,7 +12,7 @@ import { computeRotations, normalizeCard, toScryfallText } from 'mtg-crucible/pa
 import { renderCard, toDisplayCard } from 'mtg-crucible';
 import type { CardData, MtgCardDisplayData, Rotation } from 'mtg-crucible';
 import type { PoolCard, PoolFace } from '@playmat/shared';
-import { paletteColor, playmatImageUrl } from './colors';
+import { playmatImageUrl } from './colors';
 import { useGame } from './store';
 
 /**
@@ -111,37 +111,6 @@ export function useSleeveUrl(ownerId?: string): string {
     const seat = s.players.find((p) => p.playerId === ownerId)?.seat ?? 0;
     return playmatImageUrl(ps, seat, s.pool);
   });
-}
-
-/**
- * The sleeve frame color for `ownerId`'s card backs — their player color —
- * or null for the classic back, which already has its own border. A custom
- * sleeve (especially "match my playmat") would otherwise dissolve into the
- * very mat it sits on; a colored sleeve edge keeps it a card.
- */
-export function useSleeveFrame(ownerId?: string): string | null {
-  return useGame((s) => {
-    if (!ownerId) return null;
-    const mine = ownerId === s.session?.playerId;
-    const ps = s.playerStates[ownerId];
-    const choice = (mine ? s.prefs.sleeveStyle : undefined) ?? ps?.sleeve ?? 'mtg';
-    if (choice === 'mtg' || choice === 'url:') return null;
-    const seat = s.players.find((p) => p.playerId === ownerId)?.seat ?? 0;
-    return paletteColor((mine ? s.prefs.playerColor : undefined) ?? ps?.color, seat).hex;
-  });
-}
-
-/** MtgCard root props that dress a card back in its owner's sleeve frame. */
-export function sleeveProps(
-  frame: string | null,
-  className: string | undefined,
-  style: React.CSSProperties | undefined
-): { className?: string; style?: React.CSSProperties } {
-  if (!frame) return { className, style };
-  return {
-    className: className ? `${className} sleeved` : 'sleeved',
-    style: { ...style, ['--sleeve' as string]: frame },
-  };
 }
 
 // ---------------------------------------------------------------------------
