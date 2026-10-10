@@ -84,6 +84,23 @@ export function joinRoom(room: Room, name: string, playerId?: string, rejoinKey?
   return { ok: true, record: { playerId: newGuid(), rejoinKey: newGuid() }, rejoined: false, spectator: true };
 }
 
+/**
+ * Seat recovery (JoinRoomRequest.takeOver): hand over an existing seat's
+ * credentials, freeing the caller's own seat when they ask. No gating.
+ */
+export function takeOverSeat(
+  room: Room,
+  playerId: string,
+  release?: { playerId: string; rejoinKey: string }
+): SeatRecordInternal | null {
+  const target = room.seats.find((s) => s.playerId === playerId);
+  if (!target) return null;
+  if (release?.playerId && release.playerId !== target.playerId) {
+    room.seats = room.seats.filter((s) => !(s.playerId === release.playerId && s.rejoinKey === release.rejoinKey));
+  }
+  return target;
+}
+
 export function publicSeats(room: Room): SeatRecord[] {
   return room.seats.map(({ rejoinKey: _drop, ...rest }) => rest);
 }

@@ -476,6 +476,17 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 }
 /* min-width:0 lets the flex item actually shrink so the ellipsis can kick in. */
 .hud .name .name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* Seat recovery menu (take over / seat link): quiet until hovered. */
+.hud .name .seat-menu {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  padding: 0 4px;
+  line-height: 14px;
+}
+.hud .name .seat-menu:hover { color: var(--accent); }
 /* Link / link-slash icon — a dot here read as a second color swatch. */
 .presence { display: inline-flex; align-items: center; color: var(--ink-dim); }
 /* Active-player chip — the green presence dot is connectivity, not turn. */

@@ -251,4 +251,42 @@ describe('playmat protocol end-to-end', () => {
     b.close();
     e.close();
   }, 20000);
+
+  it('recovers a seat by takeover (no credentials), freeing an empty ghost seat', async () => {
+    const alice = await post<any>('/api/rooms', { name: 'Alice' });
+    const code = alice.roomCode;
+    // Alice's hand lives server-side under her playerId.
+    const res = await fetch(`${BASE}/api/rooms/${code}/hidden`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${alice.token}` },
+      body: JSON.stringify({ gameId: '', seq: 3, library: ['l1'], hand: ['h1', 'h2'] }),
+    });
+    expect(res.ok).toBe(true);
+
+    // She loses her credentials and comes back as a "new player"...
+    const ghost = await post<any>(`/api/rooms/${code}/join`, { name: 'Alice' });
+    expect(ghost.seat).toBe(1);
+    expect(ghost.playerId).not.toBe(alice.playerId);
+
+    // ...then takes her old seat back, releasing the empty one.
+    const back = await post<any>(`/api/rooms/${code}/join`, {
+      name: 'Alice',
+      takeOver: alice.playerId,
+      release: { playerId: ghost.playerId, rejoinKey: ghost.rejoinKey },
+    });
+    expect(back.playerId).toBe(alice.playerId);
+    expect(back.seat).toBe(0);
+    expect(back.rejoinKey).toBe(alice.rejoinKey); // normal rejoin works from here on
+    expect(back.players.map((p: any) => p.playerId)).toEqual([alice.playerId]);
+    const snap = await getSnapshot(code, back.token);
+    expect(snap.hidden?.hand).toEqual(['h1', 'h2']);
+
+    // A spectator (or anyone) can take a seat; a bad id is a clean 404.
+    const r404 = await fetch(`${BASE}/api/rooms/${code}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'X', takeOver: 'nope' }),
+    });
+    expect(r404.status).toBe(404);
+  });
 });

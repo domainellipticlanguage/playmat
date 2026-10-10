@@ -8,6 +8,7 @@ import { liveView, relativeEdge, screenToWorld } from '../view';
 import { paletteColor } from '../colors';
 import { CardView, DragGhost } from './CardView';
 import { LinkIcon } from './icons';
+import { takeOverLink, takeOverSeat } from '../connection';
 
 const PLAYER_COUNTERS = ['poison', 'energy', 'experience'];
 
@@ -375,6 +376,40 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
 
   const lifeAdjust = (delta: number) => actions.setLife(pid, state.life + delta);
 
+  /** Seat recovery: take this seat over, or hand someone a link that does. */
+  const seatMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const code = session?.roomCode;
+    if (!code) return;
+    const copyLink = () => {
+      void navigator.clipboard?.writeText(takeOverLink(code, pid));
+      useGame.getState().appendLog({
+        kind: 'zone',
+        text: isMe
+          ? 'Copied your seat link — open it on another device to continue there'
+          : `Copied ${player.name}'s seat link — send it to them to pick up where they left off`,
+        ts: Date.now(),
+      });
+    };
+    useUI.getState().openCtxMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: isMe
+        ? [{ label: 'Copy my seat link (continue on another device)', action: copyLink }]
+        : [
+            { label: `Copy ${player.name}'s seat link (to send them)`, action: copyLink },
+            {
+              label: `Take over ${player.name}'s seat`,
+              action: () =>
+                void takeOverSeat(code, pid).catch((err) =>
+                  useGame.getState().appendLog({ kind: 'zone', text: `Take over failed: ${err.message ?? err}`, ts: Date.now() })
+                ),
+            },
+          ],
+    });
+  };
+
   // Client-only: fold the tray down to a stat line so it stops hiding the
   // battlefield. Piles aren't drop targets while collapsed — expand to drop.
   // Phones start collapsed: an expanded tray buries half the hand strip.
@@ -388,6 +423,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         className={`hud collapsed pos-${edge}${room?.turnPlayerId === pid ? ' turn' : ''}`}
         title="Tap to expand player tray"
         onClick={() => setCollapsed(false)}
+        onContextMenu={seatMenu}
       >
         <button className="hud-collapse" title="Expand player tray" onClick={() => setCollapsed(false)}>
           ▸
@@ -414,7 +450,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
       </button>
       {/* Full-width header row: a long name overlays the piles' column instead
           of stretching a dead-space column of its own. */}
-      <div className="name" title="Tap to collapse player tray" onClick={() => setCollapsed(true)}>
+      <div className="name" title="Tap to collapse player tray" onClick={() => setCollapsed(true)} onContextMenu={seatMenu}>
         <span className={`presence ${presenceClass}`} title={presenceTitle}>
           <LinkIcon slashed={presenceClass !== 'connected'} size={12} />
         </span>
@@ -431,6 +467,13 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
             ▶ turn
           </span>
         )}
+        <button
+          className="small seat-menu"
+          title={isMe ? 'Seat link' : 'Seat recovery: take over or send a link'}
+          onClick={seatMenu}
+        >
+          ⋯
+        </button>
       </div>
       <div className="hud-body">
         <div className="who">

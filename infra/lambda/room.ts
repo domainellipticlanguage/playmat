@@ -216,12 +216,40 @@ async function createRoom(body: any, ip: string): Promise<LambdaFunctionURLResul
   });
 }
 
+const takeOverText = (by: string, seatName: string) =>
+  by === seatName ? `${seatName} rejoined their seat` : `${by} took over ${seatName}'s seat`;
+
 async function joinRoom(roomCode: string, body: any): Promise<LambdaFunctionURLResult> {
   const name = String(body.name || 'Player').slice(0, 40);
 
   for (let attempt = 0; attempt < 4; attempt++) {
     const room = await getRoom(roomCode);
     if (!room) return json(404, { error: `Room ${roomCode} not found` });
+
+    if (body.takeOver) {
+      const target = room.seats.find((s) => s.playerId === String(body.takeOver));
+      if (!target) return json(404, { error: 'That seat is no longer in this room' });
+      const rel = body.release;
+      const seats = rel?.playerId && rel.playerId !== target.playerId
+        ? room.seats.filter((s) => !(s.playerId === rel.playerId && s.rejoinKey === rel.rejoinKey))
+        : room.seats;
+      const updated: RoomRecord = {
+        ...room,
+        seats,
+        serverSeq: room.serverSeq + 2,
+        expireAt: Math.floor(Date.now() / 1000) + ROOM_TTL_S,
+      };
+      if (!(await saveRoom(updated, room.version))) continue; // lost a race; retry
+      await announceJoin(updated, takeOverText(name, target.name));
+      return json(200, {
+        roomCode,
+        playerId: target.playerId,
+        seat: target.seat,
+        token: signRoomToken({ rc: roomCode, pid: target.playerId, seat: target.seat }, JWT_KEY, ROOM_TTL_S),
+        rejoinKey: target.rejoinKey,
+        players: publicSeats(updated),
+      });
+    }
 
     // Rejoin: same playerId + rejoinKey resumes the seat (R-6).
     const existing =

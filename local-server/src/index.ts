@@ -26,7 +26,7 @@ import {
   type ArchidektProxyFailure,
 } from '@playmat/shared';
 import { signRoomToken, verifyRoomToken, type RoomClaims } from '@playmat/shared/src/jwt';
-import { createRoom, getRoom, joinRoom, listRooms, persistStateEvent, publicSeats, type Room } from './store';
+import { createRoom, getRoom, joinRoom, listRooms, persistStateEvent, publicSeats, takeOverSeat, type Room } from './store';
 
 const PORT = Number(process.env.PORT || 8787);
 const JWT_KEY = process.env.JWT_KEY || 'playmat-local-dev-key';
@@ -183,6 +183,34 @@ async function handleApi(req: IncomingMessage, res: ServerResponse, path: string
     if (req.method === 'POST' && action === 'join') {
       const body = await readBody(req);
       const name = String(body.name || 'Player').slice(0, 40);
+      if (body.takeOver) {
+        const target = takeOverSeat(room, String(body.takeOver), body.release);
+        if (!target) {
+          send(res, 404, { error: 'That seat is no longer in this room' });
+          return;
+        }
+        serverPublish(room, (next) => [
+          { t: 'seats', g: '*', by: 'server', seq: next(), seats: publicSeats(room) },
+          {
+            t: 'log', g: '*', by: 'server', seq: next(),
+            entry: {
+              kind: 'join',
+              text: name === target.name ? `${name} rejoined their seat` : `${name} took over ${target.name}'s seat`,
+              ts: Date.now(),
+            },
+          },
+        ]);
+        const resp: JoinRoomResponse = {
+          roomCode: room.code,
+          playerId: target.playerId,
+          seat: target.seat,
+          token: signRoomToken({ rc: room.code, pid: target.playerId, seat: target.seat }, JWT_KEY),
+          rejoinKey: target.rejoinKey,
+          players: publicSeats(room),
+        };
+        send(res, 200, resp);
+        return;
+      }
       const join = joinRoom(room, name, body.playerId, body.rejoinKey);
       const seat = join.spectator ? null : (join.record as any).seat;
       const token = signRoomToken(

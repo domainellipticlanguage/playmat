@@ -3,12 +3,13 @@ import { useGame } from './store';
 import { Lobby } from './components/Lobby';
 import { About } from './components/About';
 import { Table } from './components/Table';
-import { startSession, stopSession } from './connection';
+import { startSession, stopSession, takeOverSeat } from './connection';
 import { persisted } from './session';
 
 export function App() {
   const session = useGame((s) => s.session);
   const [restoring, setRestoring] = useState(true);
+  const [takeoverError, setTakeoverError] = useState<string | null>(null);
 
   // #about is the only other "page". Hash routing keeps the back arrow and
   // bookmarks working without pulling in a router for one static view.
@@ -30,8 +31,23 @@ export function App() {
   // which left no way to reach the lobby short of clearing storage.
   useEffect(() => {
     const last = persisted.get().lastSession;
-    const wantsRoom = new URLSearchParams(location.search).get('room');
-    if (wantsRoom && last && wantsRoom.toUpperCase() === last.roomCode) {
+    const params = new URLSearchParams(location.search);
+    const wantsRoom = params.get('room');
+    const takeover = params.get('takeover');
+    if (wantsRoom && takeover) {
+      // Seat-recovery link ("pick up where you left off"). Consume the param
+      // first so a reload resumes normally instead of taking over again.
+      params.delete('takeover');
+      history.replaceState(null, '', `${location.pathname}?${params}`);
+      const code = wantsRoom.toUpperCase();
+      const already = last && last.roomCode === code && last.playerId === takeover;
+      (already ? startSession(last) : takeOverSeat(code, takeover))
+        .catch((err) => {
+          setTakeoverError(String((err as Error).message ?? err));
+          useGame.getState().setSession(null);
+        })
+        .finally(() => setRestoring(false));
+    } else if (wantsRoom && last && wantsRoom.toUpperCase() === last.roomCode) {
       startSession(last)
         .catch(() => {
           persisted.patch({ lastSession: undefined });
@@ -90,5 +106,5 @@ export function App() {
     );
   }
   if (!session && showAbout) return <About />;
-  return session ? <Table /> : <Lobby />;
+  return session ? <Table /> : <Lobby notice={takeoverError && `Couldn't take over that seat: ${takeoverError}`} />;
 }

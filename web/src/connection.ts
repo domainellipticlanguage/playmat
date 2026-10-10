@@ -5,6 +5,7 @@
  */
 import {
   type HiddenState,
+  type JoinRoomRequest,
   type JoinRoomResponse,
   type SnapshotResponse,
   type StateEvent,
@@ -42,12 +43,56 @@ export async function createRoom(name: string): Promise<JoinRoomResponse> {
 export async function joinRoom(
   code: string,
   name: string,
-  rejoin?: { playerId: string; rejoinKey: string }
+  extra?: Omit<JoinRoomRequest, 'name'>
 ): Promise<JoinRoomResponse> {
   return api<JoinRoomResponse>(`/rooms/${code}/join`, {
     method: 'POST',
-    body: JSON.stringify({ name, ...rejoin }),
+    body: JSON.stringify({ name, ...extra }),
   });
+}
+
+/** A link that drops whoever opens it into `playerId`'s seat (seat recovery). */
+export function takeOverLink(roomCode: string, playerId: string): string {
+  return `${location.origin}${location.pathname}?room=${roomCode}&takeover=${playerId}`;
+}
+
+/**
+ * Seat recovery: become `targetPlayerId` in `roomCode` — their deck, hand,
+ * library, and board all live server-side under that id, so this picks up
+ * exactly where they left off. If my current seat in that room is empty (no
+ * cards — e.g. I rejoined as a "new player" by mistake), it's freed rather
+ * than left behind as a ghost seat; a seat with a deck is kept so I can take
+ * it back the same way.
+ */
+export async function takeOverSeat(roomCode: string, targetPlayerId: string): Promise<void> {
+  const live = useGame.getState().session;
+  const cur = live ?? persisted.get().lastSession;
+  const savedName = persisted.get().name;
+  let release: JoinRoomRequest['release'];
+  if (cur && cur.roomCode === roomCode && cur.seat !== null && cur.playerId !== targetPlayerId) {
+    let ownsCards = true;
+    if (live) {
+      flushHidden();
+      ownsCards = Object.values(useGame.getState().pool).some((p) => p.ownerId === cur.playerId);
+    } else {
+      ownsCards = await fetchSnapshot(cur)
+        .then((snap) => snap.pools.some((p) => p.ownerId === cur.playerId))
+        .catch(() => true);
+    }
+    if (!ownsCards) release = { playerId: cur.playerId, rejoinKey: cur.rejoinKey };
+  }
+  const resp = await joinRoom(roomCode, savedName ?? cur?.name ?? 'Someone', { takeOver: targetPlayerId, release });
+  const seatName = resp.players.find((p) => p.playerId === resp.playerId)?.name ?? savedName ?? 'Player';
+  await startSession({
+    roomCode: resp.roomCode,
+    playerId: resp.playerId,
+    seat: resp.seat,
+    token: resp.token,
+    rejoinKey: resp.rejoinKey,
+    name: seatName,
+  });
+  // At the table I'm them; my lobby default name stays mine.
+  if (savedName) persisted.patch({ name: savedName });
 }
 
 async function fetchSnapshot(session: StoredSession): Promise<SnapshotResponse> {
@@ -94,6 +139,9 @@ export function sendEphemeral(ev: EphemeralEvent): void {
 
 export async function startSession(session: StoredSession): Promise<void> {
   stopSession();
+  // Undo entries republish states as whoever recorded them — never carry
+  // them into a different seat.
+  void import('./actions').then((a) => a.clearUndo());
   // Fresh room, fresh state — nothing may bleed over from a previous session.
   useGame.setState({
     synced: false,

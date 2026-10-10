@@ -75,14 +75,14 @@ function Motes({ count = 56 }: { count?: number }) {
   );
 }
 
-export function Lobby() {
+export function Lobby({ notice }: { notice?: string | null } = {}) {
   const stored = persisted.get();
   const [name, setName] = useState(stored.name ?? '');
   const [code, setCode] = useState(new URLSearchParams(location.search).get('room') ?? '');
   /** Arrived via invite link — joining is the point, so Join leads. */
   const [invited] = useState(() => !!new URLSearchParams(location.search).get('room'));
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(notice ?? null);
 
   const go = async (mode: 'create' | 'join') => {
     setBusy(true);

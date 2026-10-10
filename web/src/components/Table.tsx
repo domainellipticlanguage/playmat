@@ -236,7 +236,15 @@ export function Table() {
               Turn {room!.turn}
             </span>
           )}
-          {spectator && <span className="status" style={{ color: 'var(--warn)' }}>spectating</span>}
+          {spectator && (
+            <span
+              className="status"
+              style={{ color: 'var(--warn)' }}
+              title="To play a seat (e.g. someone who dropped), use ⋯ on their tray → Take over"
+            >
+              spectating
+            </span>
+          )}
         </div>
         {!spectator && (
           <>

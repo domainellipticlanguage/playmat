@@ -19,6 +19,15 @@ export interface JoinRoomRequest {
   /** For rejoin: previously issued playerId + rejoinKey resume the same seat. */
   playerId?: string;
   rejoinKey?: string;
+  /**
+   * Seat recovery: take over this seat (by playerId) — for a player who lost
+   * their rejoin credentials (new device, cleared storage, joined as a new
+   * player by mistake). Deliberately ungated: it's a kitchen table, and the
+   * table log announces every takeover.
+   */
+  takeOver?: string;
+  /** With takeOver: the caller's current seat to free (only if they own nothing there). */
+  release?: { playerId: string; rejoinKey: string };
 }
 export interface JoinRoomResponse {
   roomCode: string;
