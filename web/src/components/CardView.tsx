@@ -12,7 +12,7 @@
 import { memo } from 'react';
 import { MtgCard, type MtgCardMenuItem } from 'mtg-crucible/react';
 import type { PoolCard } from '@playmat/shared';
-import { cardSearchText, displayDataFor, useCustomDisplay, useSleeveUrl } from '../cards';
+import { cardSearchText, displayDataFor, sleeveProps, useCustomDisplay, useSleeveFrame, useSleeveUrl } from '../cards';
 import { CARD_W, liveView } from '../view';
 
 const NO_CARD: PoolCard = { guid: '', ownerId: '' };
@@ -64,6 +64,8 @@ export const CardView = memo(function CardView({
   const p = pool ?? NO_CARD;
   const customDisplay = useCustomDisplay(p);
   const back = useSleeveUrl(p.ownerId || ownerId);
+  const frame = useSleeveFrame(p.ownerId || ownerId);
+  const showsBack = faceDown || (p.custom ? !customDisplay : !p.sf);
   let display =
     p.custom && !faceDown
       ? // Card back while crucible is still drawing the custom face; the hook
@@ -76,8 +78,7 @@ export const CardView = memo(function CardView({
     <MtgCard
       card={display}
       cardText={faceDown ? undefined : cardSearchText(p, rotIndex)}
-      className={className}
-      style={style}
+      {...sleeveProps(showsBack ? frame : null, className, style)}
       hideMenuItems="all"
       extraMenuItems={menuItems && withMenuClose(menuItems)}
     />

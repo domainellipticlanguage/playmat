@@ -5,6 +5,8 @@ import {
   cardRotations,
   cardSearchText,
   displayDataFor,
+  sleeveProps,
+  useSleeveFrame,
   useSleeveUrl,
   effectivePT,
   faceAt,
@@ -195,6 +197,7 @@ export const TableCard = memo(function TableCard({
           )
         : null);
   const back = useSleeveUrl(card.ownerId);
+  const frame = useSleeveFrame(card.ownerId);
   const display =
     pool?.custom && !card.faceDown
       ? customDisplay
@@ -225,7 +228,7 @@ export const TableCard = memo(function TableCard({
           <MtgCard
             card={display}
             cardText={pool && !card.faceDown ? cardSearchText(pool, card.rotIndex) : undefined}
-            style={{ width: '100%', height: '100%' }}
+            {...sleeveProps(card.faceDown ? frame : null, undefined, { width: '100%', height: '100%' })}
             rotateWidgetStyle={{ display: 'none' }}
             hideMenuItems="all"
             extraMenuItems={withMenuClose(
