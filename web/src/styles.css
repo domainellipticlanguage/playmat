@@ -719,7 +719,9 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .card-grid .gcard .mtg-card { display: block; width: 100%; }
 .card-grid .gcard .mtg-card-face { border-radius: 6px !important; }
 .card-grid .gcard .glabel { font-size: 11px; text-align: center; color: var(--ink-dim); }
+.card-grid .gcard .gtax { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 6px; font-size: 13px; }
 .card-grid .gcard:hover .mtg-card-face { outline: 2px solid var(--accent); }
+.card-grid .gcard .gface { position: relative; }
 .card-grid .gcard .gactions {
   position: absolute; inset: 0;
   display: none; flex-direction: column; justify-content: center; align-items: center; gap: 4px;
@@ -727,6 +729,8 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   border-radius: 6px;
 }
 .card-grid .gcard:hover .gactions { display: flex; }
+/* Six destinations must fit inside a 130px-wide card. */
+.card-grid .gcard .gactions button { padding: 1px 8px; font-size: 12px; line-height: 18px; }
 
 /* ---------------- Context menu ---------------- */
 

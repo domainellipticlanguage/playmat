@@ -224,33 +224,36 @@ function ZoneModal({
           const tax = c.counters['tax'] ?? 0;
           return (
             <div key={c.guid} className="gcard">
-              <CardView pool={p} rotIndex={c.rotIndex} />
+              {/* The hover actions cover only the card, never the tax row below. */}
+              <div className="gface">
+                <CardView pool={p} rotIndex={c.rotIndex} />
+                <div className="gactions">
+                  <button
+                    className="small"
+                    onClick={() => actions.moveCard(c.guid, { zone: 'battlefield', ...actions.autoPlayPosition(c.guid) })}
+                  >
+                    battlefield
+                  </button>
+                  {/* Destination owner is implicit now — moveCard always routes a
+                      card to its own owner's zones. */}
+                  <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'hand' })}>owner's hand</button>
+                  {zone !== 'graveyard' && (
+                    <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'graveyard' })}>graveyard</button>
+                  )}
+                  {zone !== 'exile' && (
+                    <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'exile' })}>exile</button>
+                  )}
+                  <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'library', libPos: 'top' })}>library top</button>
+                  <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'library', libPos: 'bottom' })}>library bottom</button>
+                </div>
+              </div>
               {zone === 'command' && (
-                <div className="glabel">
-                  commander tax: {tax * 2 > 0 ? `+${tax * 2}` : '0'}{' '}
-                  <button className="small" onClick={() => actions.setCounter(c.guid, 'tax', tax + 1)}>+</button>
+                <div className="glabel gtax" title="Commander tax: extra mana to cast it from the command zone">
                   <button className="small" onClick={() => actions.setCounter(c.guid, 'tax', Math.max(0, tax - 1))}>−</button>
+                  <span>tax +{tax * 2}</span>
+                  <button className="small" onClick={() => actions.setCounter(c.guid, 'tax', tax + 1)}>+</button>
                 </div>
               )}
-              <div className="gactions">
-                <button
-                  className="small"
-                  onClick={() => actions.moveCard(c.guid, { zone: 'battlefield', ...actions.autoPlayPosition(c.guid) })}
-                >
-                  battlefield
-                </button>
-                {/* Destination owner is implicit now — moveCard always routes a
-                    card to its own owner's zones. */}
-                <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'hand' })}>owner's hand</button>
-                {zone !== 'graveyard' && (
-                  <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'graveyard' })}>graveyard</button>
-                )}
-                {zone !== 'exile' && (
-                  <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'exile' })}>exile</button>
-                )}
-                <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'library', libPos: 'top' })}>library top</button>
-                <button className="small" onClick={() => actions.moveCard(c.guid, { zone: 'library', libPos: 'bottom' })}>library bottom</button>
-              </div>
             </div>
           );
         })}
