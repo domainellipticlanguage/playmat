@@ -489,6 +489,17 @@ describe('game state', () => {
     expect(s.log.some((l) => l.text.includes('proliferated'))).toBe(true);
   });
 
+  it('commander tax survives leaving the battlefield; other counters fall off', () => {
+    const pool = mkPool(10);
+    pool[0].commander = true;
+    actions.importDeck(pool);
+    actions.setCounter('c0', 'tax', 1);
+    actions.moveCard('c0', { zone: 'battlefield', x: 0, y: 0 });
+    actions.setCounter('c0', '+1/+1', 2);
+    actions.moveCard('c0', { zone: 'command' });
+    expect(useGame.getState().cards['c0'].counters).toEqual({ tax: 1 });
+  });
+
   it('manifest marks a face-down card 2/2 until it turns face up or leaves', () => {
     actions.importDeck(mkPool(10));
     const guid = useGame.getState().hidden.hand[0];

@@ -625,7 +625,9 @@ export const moveCard = undoable('move card', (guid: string, target: MoveTarget)
     tapped: leavingBattlefield ? false : cur.tapped,
     faceDown: target.faceDown ?? (leavingBattlefield ? false : cur.faceDown),
     rotIndex: leavingBattlefield ? 0 : cur.rotIndex,
-    counters: leavingBattlefield ? {} : cur.counters,
+    // Counters fall off a permanent that leaves — except commander tax, which
+    // belongs to the commander across every trip back to the command zone.
+    counters: leavingBattlefield ? (cur.counters.tax ? { tax: cur.counters.tax } : {}) : cur.counters,
     manifest: leavingBattlefield || target.faceDown === false ? undefined : cur.manifest,
     revealed: false,
     order: ['graveyard', 'exile', 'command'].includes(target.zone) ? topOrder(target.zone, zoneOwnerId) : 0,

@@ -237,9 +237,10 @@ export const TableCard = memo(function TableCard({
         )}
       </div>
       <div className="owner-ring" style={{ borderColor: ownerColor }} />
-      {Object.keys(card.counters).length > 0 && (
+      {Object.keys(card.counters).some((k) => k !== 'tax') && (
         <div className="counter-badges">
-          {Object.entries(card.counters).map(([label, n]) => (
+          {/* Commander tax rides along on the card but isn't a counter on the permanent. */}
+          {Object.entries(card.counters).filter(([label]) => label !== 'tax').map(([label, n]) => (
             <span key={label} className="counter-badge">
               {label === '+1/+1' || label === '-1/-1' ? `${n > 0 ? '' : ''}${label} ×${n}` : `${label}: ${n}`}
             </span>

@@ -707,6 +707,11 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
             onMouseLeave={() => useUI.getState().setHover(null)}
           >
             {piles.command[0] && <CardView pool={pool[piles.command[0].guid]} />}
+            {(piles.command[0]?.counters['tax'] ?? 0) > 0 && (
+              <span className="pile-tax" title="Commander tax: extra mana to cast it from the command zone">
+                tax +{piles.command[0].counters['tax'] * 2}
+              </span>
+            )}
             <span className="pile-count">{piles.command.length}</span>
             <span className="pile-label">command</span>
           </div>
