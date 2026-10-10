@@ -65,7 +65,9 @@ function Playmat({
           width: sideways ? h : w,
           height: sideways ? w : h,
           transform: `translate(-50%, -50%) rotate(${angle}deg)`,
-          backgroundImage: `url(${art})`,
+          // A 50% black layer over every mat (pattern, commander art, custom
+          // image): cards — especially sleeves that match the mat — stand off it.
+          backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${art})`,
         }}
       >
         <span className="playmat-name" style={{ color: `${color.hex}cc` }}>
