@@ -576,7 +576,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
             }
             onMouseLeave={() => useUI.getState().setHover(null)}
           >
-            {libraryCount > 0 && <CardView pool={topRevealedPool} />}
+            {libraryCount > 0 && <CardView pool={topRevealedPool} ownerId={pid} />}
             <span className="pile-count">{libraryCount}</span>
             <span className="pile-label">library</span>
           </div>
@@ -672,7 +672,11 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
             style={{ borderStyle: 'solid' }}>
             <span className="pile-count">{handCount}</span>
             <span className="pile-label">hand</span>
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, color: 'var(--ink-dim)' }}>🂠</div>
+            {handCount > 0 ? (
+              <CardView ownerId={pid} />
+            ) : (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, color: 'var(--ink-dim)' }}>🂠</div>
+            )}
           </div>
         </div>
       </div>
@@ -683,6 +687,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
         createPortal(
           <DragGhost
             pool={pileDrag.ghost.pool}
+            ownerId={pid}
             rotIndex={pileDrag.ghost.rotIndex ?? 0}
             faceDown={!pileDrag.ghost.pool}
             x={pileDrag.ghost.x}

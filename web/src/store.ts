@@ -43,6 +43,10 @@ export interface Prefs {
   playmatStyle?: string;
   /** Last custom playmat URL — kept even while another style is active. */
   playmatUrl?: string;
+  /** My card backs: 'mtg' | 'playmat' | 'url:…'. Unset = 'mtg'. */
+  sleeveStyle?: string;
+  /** Last custom sleeve URL — kept even while another style is active. */
+  sleeveUrl?: string;
 }
 
 export interface RemoteCursor {

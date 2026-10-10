@@ -12,6 +12,8 @@ import { computeRotations, normalizeCard, toScryfallText } from 'mtg-crucible/pa
 import { renderCard, toDisplayCard } from 'mtg-crucible';
 import type { CardData, MtgCardDisplayData, Rotation } from 'mtg-crucible';
 import type { PoolCard, PoolFace } from '@playmat/shared';
+import { playmatImageUrl } from './colors';
+import { useGame } from './store';
 
 /**
  * A card's Scryfall fields as crucible CardData. Deliberately NO layout
@@ -90,6 +92,27 @@ export function hasRotationStates(pool: PoolCard): boolean {
 export const CARD_BACK_URL =
   'https://backs.scryfall.io/normal/2/2/222b7a3b-2321-4d4c-af19-19338b134971.jpg';
 
+/**
+ * The card-back image for cards `ownerId` owns — their published sleeve
+ * choice. My own reads my local prefs so the settings preview is instant.
+ * Returns a string, so subscribers only re-render when the URL changes.
+ */
+export function useSleeveUrl(ownerId?: string): string {
+  return useGame((s) => {
+    if (!ownerId) return CARD_BACK_URL;
+    const mine = ownerId === s.session?.playerId;
+    const published = s.playerStates[ownerId];
+    const choice = (mine ? s.prefs.sleeveStyle : undefined) ?? published?.sleeve ?? 'mtg';
+    if (choice.startsWith('url:')) return choice.slice(4).trim() || CARD_BACK_URL;
+    if (choice !== 'playmat') return CARD_BACK_URL;
+    const ps = published && mine
+      ? { ...published, playmat: s.prefs.playmatStyle ?? published.playmat, color: s.prefs.playerColor ?? published.color }
+      : published;
+    const seat = s.players.find((p) => p.playerId === ownerId)?.seat ?? 0;
+    return playmatImageUrl(ps, seat, s.pool);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Mana symbols (crucible's own CDN assets, symbols/mana/*.svg)
 // ---------------------------------------------------------------------------
@@ -133,10 +156,15 @@ export function deckColorIdentity(cards: Pick<PoolCard, 'sf' | 'commander'>[]): 
  * image only, no rotations array — so the component's own click-to-rotate
  * stays inert and every player sees the same thing.
  */
-export function displayDataFor(pool: PoolCard, rotIndex: number, faceDown: boolean): MtgCardDisplayData {
+export function displayDataFor(
+  pool: PoolCard,
+  rotIndex: number,
+  faceDown: boolean,
+  backUrl: string = CARD_BACK_URL
+): MtgCardDisplayData {
   if (faceDown || (!pool.sf && !pool.custom)) {
     return {
-      frontFaceImageUrl: CARD_BACK_URL,
+      frontFaceImageUrl: backUrl,
       name: 'Face-down card',
       scryfallJson: '',
       scryfallText: '',

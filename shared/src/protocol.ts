@@ -119,6 +119,12 @@ export interface PlayerState {
    * 'commander' (this player's commander art crop), or 'url:<https image url>'.
    */
   playmat?: string;
+  /**
+   * Card-back ("sleeve") choice for cards this player owns: 'mtg' (the
+   * standard Magic back), 'playmat' (whatever their playmat shows), or
+   * 'url:<https image url>'. Optional; unset = 'mtg'.
+   */
+  sleeve?: string;
 }
 
 export interface RoomState {

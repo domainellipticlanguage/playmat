@@ -5,6 +5,7 @@ import {
   cardRotations,
   cardSearchText,
   displayDataFor,
+  useSleeveUrl,
   effectivePT,
   faceAt,
   hasRotationStates,
@@ -187,8 +188,13 @@ export const TableCard = memo(function TableCard({
             card.counters
           )
         : null);
+  const back = useSleeveUrl(card.ownerId);
   const display =
-    pool?.custom && !card.faceDown ? customDisplay : pool ? displayDataFor(pool, card.rotIndex, card.faceDown) : null;
+    pool?.custom && !card.faceDown
+      ? customDisplay
+      : pool
+        ? displayDataFor(pool, card.rotIndex, card.faceDown, back)
+        : null;
 
   return (
     <div

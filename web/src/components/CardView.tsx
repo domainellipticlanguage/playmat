@@ -12,7 +12,7 @@
 import { memo } from 'react';
 import { MtgCard, type MtgCardMenuItem } from 'mtg-crucible/react';
 import type { PoolCard } from '@playmat/shared';
-import { cardSearchText, displayDataFor, useCustomDisplay } from '../cards';
+import { cardSearchText, displayDataFor, useCustomDisplay, useSleeveUrl } from '../cards';
 import { CARD_W, liveView } from '../view';
 
 const NO_CARD: PoolCard = { guid: '', ownerId: '' };
@@ -37,6 +37,8 @@ export function withMenuClose(items: MtgCardMenuItem[]): MtgCardMenuItem[] {
 export interface CardViewProps {
   /** Pool entry to display; omit (or pass null) for a plain card back. */
   pool?: PoolCard | null;
+  /** Whose sleeve a pool-less card back wears (e.g. a library pile). */
+  ownerId?: string;
   rotIndex?: number;
   faceDown?: boolean;
   /** Swap Scryfall /normal/ images for /large/ (hover preview). */
@@ -51,6 +53,7 @@ export interface CardViewProps {
  * (stable pool ref + scalar props) skip their whole MtgCard subtree. */
 export const CardView = memo(function CardView({
   pool,
+  ownerId,
   rotIndex = 0,
   faceDown = false,
   large = false,
@@ -60,13 +63,14 @@ export const CardView = memo(function CardView({
 }: CardViewProps) {
   const p = pool ?? NO_CARD;
   const customDisplay = useCustomDisplay(p);
+  const back = useSleeveUrl(p.ownerId || ownerId);
   let display =
     p.custom && !faceDown
       ? // Card back while crucible is still drawing the custom face; the hook
         // holds the previous face across prop changes, so live edits (token
         // preview) never flash back to it.
-        customDisplay ?? displayDataFor(p, rotIndex, true)
-      : displayDataFor(p, rotIndex, faceDown);
+        customDisplay ?? displayDataFor(p, rotIndex, true, back)
+      : displayDataFor(p, rotIndex, faceDown, back);
   if (large) display = { ...display, frontFaceImageUrl: display.frontFaceImageUrl.replace('/normal/', '/large/') };
   return (
     <MtgCard
@@ -90,6 +94,7 @@ export const CardView = memo(function CardView({
  */
 export function DragGhost({
   pool,
+  ownerId,
   rotIndex = 0,
   faceDown = false,
   x,
@@ -97,6 +102,7 @@ export function DragGhost({
   w,
 }: {
   pool?: PoolCard | null;
+  ownerId?: string;
   rotIndex?: number;
   faceDown?: boolean;
   x: number;
@@ -110,6 +116,7 @@ export function DragGhost({
     <CardView
       className="card-ghost"
       pool={pool}
+      ownerId={ownerId}
       rotIndex={rotIndex}
       faceDown={faceDown}
       style={{ position: 'fixed', width, left: x - width / 2, top: y - h / 2, transition: 'width 120ms ease' }}

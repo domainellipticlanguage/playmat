@@ -865,6 +865,7 @@ function PrefsModal({ onClose }: { onClose: () => void }) {
   const matChoice = prefs.playmatStyle?.startsWith('url:')
     ? 'url'
     : prefs.playmatStyle ?? 'color';
+  const sleeveChoice = prefs.sleeveStyle?.startsWith('url:') ? 'url' : prefs.sleeveStyle ?? 'mtg';
   /** Color + playmat are shared identity — publish so the table sees them. */
   const publishIdentity = () => {
     if (session?.seat !== null && session?.seat !== undefined) actions.publishMyCounts();
@@ -923,6 +924,40 @@ function PrefsModal({ onClose }: { onClose: () => void }) {
           onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
         />
       )}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            Card backs (sleeves)
+            <select
+              value={sleeveChoice}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPrefs({ sleeveStyle: v === 'url' ? `url:${prefs.sleeveUrl ?? ''}` : v });
+                publishIdentity();
+              }}
+            >
+              <option value="mtg">Classic Magic back</option>
+              <option value="playmat">Match my playmat</option>
+              <option value="url">Custom image URL…</option>
+            </select>
+          </label>
+          {sleeveChoice === 'url' && (
+            <input
+              autoFocus={!prefs.sleeveUrl}
+              placeholder="https://… (image URL for your card backs)"
+              value={prefs.sleeveUrl ?? prefs.sleeveStyle?.slice(4) ?? ''}
+              onChange={(e) => {
+                const u = e.target.value;
+                setPrefs({ sleeveUrl: u, sleeveStyle: `url:${u}` });
+              }}
+              onBlur={publishIdentity}
+              onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
+            />
+          )}
+          <span className="subtle">Everyone sees your sleeves on your face-down cards, library, and hand.</span>
+        </div>
+        <CardView ownerId={session?.playerId} style={{ width: 64, flexShrink: 0 }} />
+      </div>
       <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
           type="checkbox"

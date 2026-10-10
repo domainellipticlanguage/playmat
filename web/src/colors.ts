@@ -30,6 +30,19 @@ export function paletteColor(name: string | undefined, seat: number): PlayerColo
   return PLAYER_PALETTE.find((c) => c.name === name) ?? seatDefaultColor(seat);
 }
 
+// Card backs ask for the playmat once per rendered card back, so memoize the
+// pool scan per pool object (the store replaces the object on any change).
+const commanderImgCache = new WeakMap<Record<string, PoolCard>, Map<string, string | undefined>>();
+function commanderImg(pool: Record<string, PoolCard>, ownerId: string): string | undefined {
+  let byOwner = commanderImgCache.get(pool);
+  if (!byOwner) commanderImgCache.set(pool, (byOwner = new Map()));
+  if (!byOwner.has(ownerId)) {
+    const cmdr = Object.values(pool).find((p) => p.ownerId === ownerId && p.commander);
+    byOwner.set(ownerId, cmdr?.sf?.faces[0]?.img);
+  }
+  return byOwner.get(ownerId);
+}
+
 /**
  * A player's mat background image, from their published choice: a custom URL,
  * their commander's art crop, or the stock pattern for their color.
@@ -42,8 +55,7 @@ export function playmatImageUrl(
   const choice = ps?.playmat ?? 'color';
   if (choice.startsWith('url:')) return choice.slice(4);
   if (choice === 'commander' && ps) {
-    const cmdr = Object.values(pool).find((p) => p.ownerId === ps.playerId && p.commander);
-    const img = cmdr?.sf?.faces[0]?.img;
+    const img = commanderImg(pool, ps.playerId);
     // Scryfall images share one path scheme, so the art crop is a substring swap.
     if (img) return img.replace('/normal/', '/art_crop/');
   }
