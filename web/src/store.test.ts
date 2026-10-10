@@ -270,6 +270,63 @@ describe('hidden-zone bookkeeping', () => {
     expect(s.hidden.library).toHaveLength(before - 1);
   });
 
+  it('a peer bouncing my battlefield card lands it in my hand', () => {
+    actions.drawCards(1);
+    const guid = useGame.getState().hidden.hand[0];
+    actions.playFromHand(guid, 100, 100);
+    const before = useGame.getState().hidden.hand.length;
+    useGame.getState().applyStateEvent(foeMoves(guid, { zone: 'hand' }));
+    expect(useGame.getState().hidden.hand).toContain(guid);
+    expect(useGame.getState().hidden.hand).toHaveLength(before + 1);
+  });
+
+  /** A reconnect snapshot of the current board with some cards overridden by FOE. */
+  const snapshotWith = (overrides: CardState[]) => {
+    const s = useGame.getState();
+    const cards = { ...s.cards };
+    const seqs = { ...s.seqs };
+    for (const c of overrides) {
+      cards[c.guid] = c;
+      seqs[`card#${c.guid}`] = { seq: 999, by: FOE };
+    }
+    return {
+      roomCode: 'ROOM1', players: s.players, playerStates: Object.values(s.playerStates), room: s.room,
+      pools: Object.values(s.pool), cards: Object.values(cards), seqs, logs: [], poolImports: s.poolImports,
+      hidden: { gameId: s.room!.gameId, seq: s.hiddenSeq, ...s.hidden },
+    } as any;
+  };
+
+  it('snapshot catch-up: a card bounced to my hand while I was offline is not lost', () => {
+    actions.drawCards(1);
+    const guid = useGame.getState().hidden.hand[0];
+    actions.playFromHand(guid, 100, 100);
+    const before = useGame.getState().hidden.hand.length;
+    const card = { ...useGame.getState().cards[guid], zone: 'hand' as const };
+    useGame.getState().applySnapshot(snapshotWith([card]));
+    const s = useGame.getState();
+    expect(s.hidden.hand.filter((g) => g === guid)).toHaveLength(1);
+    expect(s.hidden.hand).toHaveLength(before + 1);
+    // Applying the same snapshot again must not duplicate it.
+    useGame.getState().applySnapshot(snapshotWith([card]));
+    expect(useGame.getState().hidden.hand.filter((g) => g === guid)).toHaveLength(1);
+  });
+
+  it('snapshot catch-up: a hand card a peer discarded while I was offline leaves my hand', () => {
+    actions.drawCards(1);
+    const guid = useGame.getState().hidden.hand[0];
+    useGame.getState().applySnapshot(snapshotWith([{ ...useGame.getState().cards[guid]!, ...(foeMoves(guid, { zone: 'graveyard' }) as Extract<StateEvent, { t: 'card' }>).card }]));
+    expect(useGame.getState().hidden.hand).not.toContain(guid);
+  });
+
+  it('snapshot catch-up leaves my own moves alone', () => {
+    actions.drawCards(1);
+    const guid = useGame.getState().hidden.hand[0];
+    actions.moveCard(guid, { zone: 'library', libPos: 'top' }); // my own marker
+    const hidden = useGame.getState().hidden;
+    useGame.getState().applySnapshot(snapshotWith([]));
+    expect(useGame.getState().hidden).toEqual(hidden);
+  });
+
   it('moving a peer-owned card sends it to THEIR zone, never mine', () => {
     useGame.setState({
       pool: { ...useGame.getState().pool, foecard: { guid: 'foecard', ownerId: FOE } },

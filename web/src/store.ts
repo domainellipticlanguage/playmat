@@ -387,6 +387,36 @@ export const useGame = create<GameStore>((set, get) => ({
       }
     }
 
+    // Z-6 catch-up. The live fold-in (applyStateEvent) only sees peer moves
+    // made while I'm connected; a peer who bounced my card to my hand while I
+    // was away left it public-marked "hand" but in NO hidden zone — gone. Fold
+    // in any peer-authored card state the snapshot shows, conservatively: only
+    // rescue cards missing from both my hidden zones (my own later shuffles
+    // and mulligans don't republish markers, so don't relocate within them),
+    // and only drop hidden cards a peer has since made public.
+    const me = state.session?.playerId;
+    if (me) {
+      let library = hidden.library;
+      let hand = hidden.hand;
+      for (const c of snap.cards) {
+        if (c.del || snap.seqs[`card#${c.guid}`]?.by === me) continue;
+        const inHidden = library.includes(c.guid) || hand.includes(c.guid);
+        const landsWithMe = HIDDEN_ZONES.includes(c.zone) && (c.zoneOwnerId ?? c.ownerId) === me;
+        if (landsWithMe && !inHidden) {
+          if (c.zone === 'hand') hand = [...hand, c.guid];
+          else if (c.libPos === 'bottom') library = [...library, c.guid];
+          else library = [c.guid, ...library];
+        } else if (!HIDDEN_ZONES.includes(c.zone) && inHidden) {
+          library = library.filter((g) => g !== c.guid);
+          hand = hand.filter((g) => g !== c.guid);
+        }
+      }
+      if (library !== hidden.library || hand !== hidden.hand) {
+        hidden = { library, hand };
+        hiddenSeq += 1;
+      }
+    }
+
     set({
       players: keepIfEqual(state.players, snap.players),
       playerStates,
