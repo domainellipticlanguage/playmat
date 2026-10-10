@@ -489,6 +489,20 @@ describe('game state', () => {
     expect(s.log.some((l) => l.text.includes('proliferated'))).toBe(true);
   });
 
+  it('manifest marks a face-down card 2/2 until it turns face up or leaves', () => {
+    actions.importDeck(mkPool(10));
+    const guid = useGame.getState().hidden.hand[0];
+    actions.playFromHand(guid, 100, 100, true);
+    actions.setManifest(guid, true);
+    expect(useGame.getState().cards[guid].manifest).toBe(true);
+    actions.setFaceDown(guid, false);
+    expect(useGame.getState().cards[guid].manifest).toBeUndefined();
+    actions.setFaceDown(guid, true);
+    actions.setManifest(guid, true);
+    actions.moveCard(guid, { zone: 'graveyard' });
+    expect(useGame.getState().cards[guid].manifest).toBeUndefined();
+  });
+
   it('commander damage ticks life in the same event', () => {
     const cmdrGuid = 'enemy-cmdr';
     useGame.setState((s) => ({

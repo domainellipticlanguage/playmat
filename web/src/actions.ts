@@ -626,6 +626,7 @@ export const moveCard = undoable('move card', (guid: string, target: MoveTarget)
     faceDown: target.faceDown ?? (leavingBattlefield ? false : cur.faceDown),
     rotIndex: leavingBattlefield ? 0 : cur.rotIndex,
     counters: leavingBattlefield ? {} : cur.counters,
+    manifest: leavingBattlefield || target.faceDown === false ? undefined : cur.manifest,
     revealed: false,
     order: ['graveyard', 'exile', 'command'].includes(target.zone) ? topOrder(target.zone, zoneOwnerId) : 0,
     libPos: target.zone === 'library' ? target.libPos ?? 'top' : undefined,
@@ -779,7 +780,12 @@ export const setRotIndex = undoable('turn/transform', (guid: string, rotIndex: n
 });
 
 export const setFaceDown = undoable('flip', (guid: string, faceDown: boolean): void => {
-  sendState([cardEvent({ ...currentCard(guid), faceDown })]);
+  sendState([cardEvent({ ...currentCard(guid), faceDown, manifest: faceDown ? currentCard(guid).manifest : undefined })]);
+});
+
+/** Mark a face-down card as a 2/2 creature (manifest, morph, disguise…). */
+export const setManifest = undoable('manifest', (guid: string, manifest: boolean): void => {
+  sendState([cardEvent({ ...currentCard(guid), manifest: manifest || undefined })]);
 });
 
 export const setCounter = undoable('counter change', (guid: string, label: string, value: number): void => {

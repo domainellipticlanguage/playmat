@@ -46,6 +46,11 @@ export interface CardState {
   z?: number;
   tapped: boolean;
   faceDown: boolean;
+  /**
+   * Face-down creature marker (manifest / morph / disguise / cloak): shows a
+   * 2/2 P/T on the back. Cleared when turned face up or off the battlefield.
+   */
+  manifest?: boolean;
   /** Which face is showing for multi-face cards (0 = front). */
   faceIndex: number;
   /** Index into the card's crucible rotations array. */

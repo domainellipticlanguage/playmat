@@ -42,6 +42,10 @@ function menuItemsFor(card: CardState, pool: PoolCard | undefined) {
     // force a table-wide reveal. Deliberately NOT gated on ownership — same
     // honor system as every other verb here.
     items.push({ label: 'Peek (only you see it)', action: () => useUI.getState().openModal({ kind: 'card', guid: g }) });
+    items.push({
+      label: card.manifest ? 'Un-manifest (no P/T)' : 'Manifest (2/2 creature)',
+      action: () => actions.setManifest(g, !card.manifest),
+    });
   }
   if (pool && hasRotationStates(pool)) {
     const n = cardRotations(pool).length;
@@ -180,7 +184,9 @@ export const TableCard = memo(function TableCard({
   const face = pool ? faceAt(pool, card.rotIndex) : null;
   const customDisplay = useCustomDisplay(pool);
   const pt = card.faceDown
-    ? null
+    ? card.manifest
+      ? effectivePT({ name: '', img: '', power: '2', toughness: '2' }, card.counters)
+      : null
     : effectivePT(face, card.counters) ??
       (pool?.custom && typeof pool.custom.power === 'string' && typeof pool.custom.toughness === 'string'
         ? effectivePT(
