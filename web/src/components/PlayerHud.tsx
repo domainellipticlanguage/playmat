@@ -713,13 +713,14 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
 
           <div className="pile" data-drop={`hand:${pid}`} title={`${player.name}'s hand`}
             style={{ borderStyle: 'solid' }}>
-            <span className="pile-count">{handCount}</span>
-            <span className="pile-label">hand</span>
+            {/* Card first, like the other piles: count + label paint over it. */}
             {handCount > 0 ? (
               <CardView ownerId={pid} />
             ) : (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, color: 'var(--ink-dim)' }}>🂠</div>
             )}
+            <span className="pile-count">{handCount}</span>
+            <span className="pile-label">hand</span>
           </div>
         </div>
       </div>
