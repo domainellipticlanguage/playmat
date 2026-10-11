@@ -24,6 +24,8 @@ export type ModalState =
   | { kind: 'import' }
   | { kind: 'prefs' }
   | { kind: 'revealed'; playerId: string }
+  /** Someone's hand, shown only to me (private peek answered by its owner). */
+  | { kind: 'handPeek'; ownerId: string; hand: string[] }
   | { kind: 'openingHand' };
 
 export interface CtxMenuItem {

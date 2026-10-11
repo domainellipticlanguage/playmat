@@ -724,10 +724,13 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
                 x: e.clientX,
                 y: e.clientY,
                 items: [
+                  ...(isMe
+                    ? []
+                    : [{ label: `Peek at ${player.name}'s hand (only you see it)`, action: () => actions.peekHand(pid) }]),
                   {
                     label: open
                       ? `Stop revealing ${isMe ? 'my' : `${player.name}'s`} hand`
-                      : `Reveal ${isMe ? 'my' : `${player.name}'s`} hand (stays open)`,
+                      : `Reveal ${isMe ? 'my' : `${player.name}'s`} hand to the table (stays open)`,
                     action: () => actions.setHandOpen(pid, !open),
                   },
                 ],

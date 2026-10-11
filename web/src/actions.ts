@@ -15,7 +15,7 @@ import {
   newGuid,
   shuffled,
 } from '@playmat/shared';
-import { sendState as sendToNet, flushHidden } from './connection';
+import { sendState as sendToNet, flushHidden, requestHandPeek } from './connection';
 import { nextSeq, useGame, cardName } from './store';
 import { CARD_H, CARD_W, matRect, matSeatAt, matSlots } from './view';
 import { seatDefaultColor } from './colors';
@@ -849,6 +849,17 @@ export const setHandOpen = undoable('reveal hand', (playerId: string, on: boolea
     logEvent({ kind: 'reveal', text: on ? `${myName} revealed ${name}'s hand` : `${myName} stopped revealing ${name}'s hand` }),
   ]);
 });
+
+/**
+ * Look at a player's hand privately (Gitaxian Probe). The table log says you
+ * looked; only you see the cards — their client answers the request.
+ */
+export function peekHand(playerId: string): void {
+  const { s, myName } = ctx();
+  const name = s.players.find((p) => p.playerId === playerId)?.name ?? '?';
+  sendState([logEvent({ kind: 'reveal', text: `${myName} looked at ${name}'s hand` })]);
+  requestHandPeek(playerId);
+}
 
 /**
  * My side of a peer opening/closing my hand, and of cards arriving in an open

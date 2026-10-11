@@ -1030,6 +1030,53 @@ function PrefsModal({ onClose }: { onClose: () => void }) {
 }
 
 // ---------------------------------------------------------------------------
+// Private hand peek (Gitaxian Probe): someone's hand, shown only to me
+// ---------------------------------------------------------------------------
+
+function HandPeekModal({ ownerId, hand, onClose }: { ownerId: string; hand: string[]; onClose: () => void }) {
+  const pool = useGame((s) => s.pool);
+  const name = useGame((s) => s.players.find((p) => p.playerId === ownerId)?.name ?? '?');
+  // What I saw, minus whatever I've since moved out of it. Every move routes
+  // to the OWNER's zones (moveCard), and their client folds it out of the hand.
+  const [cards, setCards] = useState(hand);
+  const move = (guid: string, fn: () => void) => {
+    fn();
+    setCards((cs) => cs.filter((g) => g !== guid));
+  };
+  return (
+    <Backdrop onClose={onClose}>
+      <div className="modal-head">
+        <h3>{name}'s hand ({cards.length})</h3>
+        <button className="modal-close" onClick={onClose} title="Close" aria-label="Close">✕</button>
+      </div>
+      <span className="subtle">Only you can see this. Hover a card to act on it for {name}.</span>
+      <div className="card-grid">
+        {cards.map((guid) => (
+          <div key={guid} className="gcard">
+            <div className="gface">
+              <CardView pool={pool[guid]} />
+              <div className="gactions">
+                <button className="small" onClick={() => move(guid, () => actions.moveCard(guid, { zone: 'graveyard' }))}>discard</button>
+                <button className="small" onClick={() => move(guid, () => actions.moveCard(guid, { zone: 'exile' }))}>exile</button>
+                <button className="small" onClick={() => move(guid, () => actions.moveCard(guid, { zone: 'battlefield', ...actions.autoPlayPosition(guid) }))}>
+                  play for {name}
+                </button>
+                <button className="small" onClick={() => move(guid, () => actions.moveCard(guid, { zone: 'library', libPos: 'top' }))}>library top</button>
+                <button className="small" onClick={() => move(guid, () => actions.moveCard(guid, { zone: 'library', libPos: 'bottom' }))}>library bottom</button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {cards.length === 0 && <span className="subtle">Their hand is empty.</span>}
+      </div>
+      <div style={{ textAlign: 'right' }}>
+        <button className="primary" onClick={onClose}>Close</button>
+      </div>
+    </Backdrop>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Switchboard
 // ---------------------------------------------------------------------------
 
@@ -1054,6 +1101,8 @@ export function ModalHost() {
       return <PrefsModal onClose={close} />;
     case 'openingHand':
       return <OpeningHandModal onClose={close} />;
+    case 'handPeek':
+      return <HandPeekModal key={modal.hand.join()} ownerId={modal.ownerId} hand={modal.hand} onClose={close} />;
     case 'confirm':
       return (
         <Backdrop onClose={close}>

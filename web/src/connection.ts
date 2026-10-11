@@ -18,6 +18,7 @@ import { logWire } from './debug';
 import { EventsClient } from './transport';
 import { persisted, type StoredSession } from './session';
 import { useGame } from './store';
+import { useUI } from './uiStore';
 
 let client: EventsClient | null = null;
 let presenceTimer: ReturnType<typeof setInterval> | null = null;
@@ -189,7 +190,12 @@ export async function startSession(session: StoredSession): Promise<void> {
     }),
     client.subscribe(ephemeralChannel(session.roomCode), (ev) => {
       logWire('recv', 'ephemeral', [ev]);
-      useGame.getState().applyEphemeral(ev as EphemeralEvent);
+      const e = ev as EphemeralEvent;
+      if (e.t === 'peekRequest' || e.t === 'handPeek') {
+        handlePeek(e);
+        return;
+      }
+      useGame.getState().applyEphemeral(e);
     }),
   ]);
 
@@ -286,6 +292,24 @@ function adoptExistingSetup(): void {
   const hasBoard = Object.values(s.cards).some((c) => c.ownerId === me);
   const hasPlayerState = !!s.playerStates[me];
   if (hasHidden || hasBoard || hasPlayerState) s.markSetupDone(gameId);
+}
+
+/** Ask `target`'s client to show me their hand (only me). */
+export function requestHandPeek(target: string): void {
+  const me = useGame.getState().session?.playerId;
+  if (me) sendEphemeral({ t: 'peekRequest', by: me, target, ts: Date.now() });
+}
+
+function handlePeek(e: Extract<EphemeralEvent, { t: 'peekRequest' } | { t: 'handPeek' }>): void {
+  const s = useGame.getState();
+  const me = s.session?.playerId;
+  if (!me) return;
+  if (e.t === 'peekRequest' && e.target === me) {
+    // I'm the only one who knows my hand: answer the asker directly.
+    sendEphemeral({ t: 'handPeek', by: me, to: e.by, hand: s.hidden.hand, ts: Date.now() });
+  } else if (e.t === 'handPeek' && e.to === me) {
+    useUI.getState().openModal({ kind: 'handPeek', ownerId: e.by, hand: e.hand });
+  }
 }
 
 export function stopSession(): void {

@@ -235,7 +235,15 @@ export type EphemeralEvent =
   | { t: 'cursor'; by: string; x: number; y: number; ts: number }
   | { t: 'drag'; by: string; guid: string; x: number; y: number; ts: number }
   | { t: 'dragend'; by: string; guid: string; ts: number }
-  | { t: 'presence'; by: string; name: string; seat: number | null; ts: number };
+  | { t: 'presence'; by: string; name: string; seat: number | null; ts: number }
+  /**
+   * Private hand peek (Gitaxian Probe): `by` asks to look at `target`'s hand.
+   * Only the target's client knows the hand, so it answers with `handPeek`
+   * addressed `to` the asker; other clients ignore both (honor system — like
+   * the published library order, the guids aren't secret on the wire).
+   */
+  | { t: 'peekRequest'; by: string; target: string; ts: number }
+  | { t: 'handPeek'; by: string; to: string; hand: string[]; ts: number };
 
 export type AnyEvent = StateEvent | EphemeralEvent;
 
