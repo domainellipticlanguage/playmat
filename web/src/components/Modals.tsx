@@ -1061,6 +1061,9 @@ function HandPeekModal({ ownerId, hand, onClose }: { ownerId: string; hand: stri
                 <button className="small" onClick={() => move(guid, () => actions.moveCard(guid, { zone: 'battlefield', ...actions.autoPlayPosition(guid) }))}>
                   play for {name}
                 </button>
+                <button className="small" onClick={() => move(guid, () => actions.moveCard(guid, { zone: 'battlefield', faceDown: true, ...actions.autoPlayPosition(guid) }))}>
+                  play face down
+                </button>
                 <button className="small" onClick={() => move(guid, () => actions.moveCard(guid, { zone: 'library', libPos: 'top' }))}>library top</button>
                 <button className="small" onClick={() => move(guid, () => actions.moveCard(guid, { zone: 'library', libPos: 'bottom' }))}>library bottom</button>
               </div>
