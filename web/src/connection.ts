@@ -249,6 +249,20 @@ export async function startSession(session: StoredSession): Promise<void> {
         });
       }
     }
+    // A peer opened or closed my hand (Duress, Gitaxian Probe…): only this
+    // client knows what's in it, so answer with the reveals. Cards arriving in
+    // an open hand (draws, a peer's bounce) get revealed the same way.
+    {
+      const me = s.session?.playerId;
+      const open = me ? s.playerStates[me]?.showHandToTable : undefined;
+      const was = me ? prev.playerStates[me]?.showHandToTable : undefined;
+      const flippedByPeer = open !== was && s.seqs[`player#${me}`]?.by !== me;
+      if (me && (flippedByPeer || (open && s.hiddenSeq !== prev.hiddenSeq))) {
+        queueMicrotask(() => {
+          void import('./actions').then((a) => a.syncOpenHand(!!useGame.getState().playerStates[me]?.showHandToTable));
+        });
+      }
+    }
     const gid = s.room?.gameId;
     if (gid && gid !== prev.room?.gameId) {
       // Microtask: let the current event batch finish applying first.

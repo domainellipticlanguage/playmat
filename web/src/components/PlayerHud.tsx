@@ -716,7 +716,23 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
             <span className="pile-label">command</span>
           </div>
 
-          <div className="pile" data-drop={`hand:${pid}`} title={`${player.name}'s hand`}
+          <div className="pile" data-drop={`hand:${pid}`} title={`${player.name}'s hand · right-click: reveal`}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              const open = !!state.showHandToTable;
+              useUI.getState().openCtxMenu({
+                x: e.clientX,
+                y: e.clientY,
+                items: [
+                  {
+                    label: open
+                      ? `Stop revealing ${isMe ? 'my' : `${player.name}'s`} hand`
+                      : `Reveal ${isMe ? 'my' : `${player.name}'s`} hand (stays open)`,
+                    action: () => actions.setHandOpen(pid, !open),
+                  },
+                ],
+              });
+            }}
             style={{ borderStyle: 'solid' }}>
             {/* Card first, like the other piles: count + label paint over it. */}
             {handCount > 0 ? (

@@ -868,6 +868,8 @@ function PrefsModal({ onClose }: { onClose: () => void }) {
   const matChoice = prefs.playmatStyle?.startsWith('url:')
     ? 'url'
     : prefs.playmatStyle ?? 'color';
+  // This room's actual state — a peer may have opened my hand.
+  const handIsOpen = useGame((s) => s.playerStates[s.session?.playerId ?? '']?.showHandToTable ?? s.prefs.showHandToTable);
   const sleeveChoice = prefs.sleeveStyle?.startsWith('url:') ? 'url' : prefs.sleeveStyle ?? 'mtg';
   /** Color + playmat are shared identity — publish so the table sees them. */
   const publishIdentity = () => {
@@ -980,7 +982,7 @@ function PrefsModal({ onClose }: { onClose: () => void }) {
       <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
           type="checkbox"
-          checked={prefs.showHandToTable}
+          checked={handIsOpen}
           onChange={(e) => actions.setShowHandToTable(e.target.checked)}
         />
         Teaching mode: continuously reveal my hand to the table

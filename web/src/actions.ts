@@ -88,8 +88,10 @@ function myPlayerState(patch: Partial<PlayerState> = {}): PlayerState {
   // Library order goes out with every publish so peers can browse/search it
   // like any other zone. My hand stays private — only the count ships.
   merged.library = s.hidden.library;
-  // Peers need this to know whether my hand is open for them to act on.
-  merged.showHandToTable = s.prefs.showHandToTable;
+  // Peers need this to know whether my hand is open for them to act on. It's
+  // per-room state (a peer may open it — Duress, Gitaxian Probe); my teaching-
+  // mode pref only seeds it the first time I publish in a room.
+  merged.showHandToTable = patch.showHandToTable ?? prev?.showHandToTable ?? s.prefs.showHandToTable;
   // Identity color + playmat ride along on every publish; the color always
   // resolves (seat default) so peers never have to guess.
   merged.color = s.prefs.playerColor ?? merged.color ?? seatDefaultColor(merged.seat).name;
@@ -204,10 +206,16 @@ function addToHidden(
   s.setHidden(library, s.hidden.hand);
 }
 
+/** Is my hand open to the table in this room (teaching mode, or a peer opened it)? */
+export function handOpen(): boolean {
+  const { s, me } = ctx();
+  return s.playerStates[me]?.showHandToTable ?? s.prefs.showHandToTable;
+}
+
 /** Reveal-sync for teaching mode: keep every hand card published as revealed. */
 function syncHandReveals(events: StateEvent[]): void {
   const { s, me } = ctx();
-  if (!s.prefs.showHandToTable) return;
+  if (!handOpen()) return;
   for (const guid of s.hidden.hand) {
     const cur = s.cards[guid];
     if (!cur || cur.zone !== 'hand' || !cur.revealed) {
@@ -803,17 +811,53 @@ export const revealFromHand = undoable('reveal', (guid: string, revealed: boolea
   sendState([cardEvent({ ...currentCard(guid), zone: 'hand', zoneOwnerId: me, revealed })]);
 });
 
+/** The teaching-mode pref: my default for new rooms, and this room right now. */
 export function setShowHandToTable(on: boolean): void {
+  ctx().s.setPrefs({ showHandToTable: on });
+  openMyHand(on);
+}
+
+/** Card events that publish every card in my hand as revealed / hidden. */
+function handRevealEvents(on: boolean): StateEvent[] {
   const { s, me } = ctx();
-  s.setPrefs({ showHandToTable: on });
-  const events: StateEvent[] = [];
-  for (const guid of s.hidden.hand) {
-    events.push(cardEvent({ ...currentCard(guid), zone: 'hand', zoneOwnerId: me, revealed: on }));
-  }
+  return s.hidden.hand
+    .filter((guid) => !!s.cards[guid]?.revealed !== on || s.cards[guid]?.zone !== 'hand')
+    .map((guid) => cardEvent({ ...currentCard(guid), zone: 'hand', zoneOwnerId: me, revealed: on }));
+}
+
+function openMyHand(on: boolean): void {
   // Publish the flag itself, not just the reveals — peers gate whether they may
   // act on my hand on this, and an empty hand would otherwise announce nothing.
-  events.push(playerEvent(myPlayerState()));
-  sendState(events);
+  sendState([...handRevealEvents(on), playerEvent(myPlayerState({ showHandToTable: on }))]);
+}
+
+/**
+ * Open (or close) a player's hand to the table for the rest of the game —
+ * anyone may, for anyone (Duress, Gitaxian Probe…; honor system). For a peer
+ * this only flips their published flag: their client owns the hand's contents
+ * and answers with the reveals (`syncOpenHand`, wired in connection.ts).
+ */
+export const setHandOpen = undoable('reveal hand', (playerId: string, on: boolean): void => {
+  const { s, me, myName } = ctx();
+  if (playerId === me) {
+    openMyHand(on);
+    return;
+  }
+  const name = s.players.find((p) => p.playerId === playerId)?.name ?? '?';
+  sendState([
+    playerEvent(theirPlayerState(playerId, { showHandToTable: on })),
+    logEvent({ kind: 'reveal', text: on ? `${myName} revealed ${name}'s hand` : `${myName} stopped revealing ${name}'s hand` }),
+  ]);
+});
+
+/**
+ * My side of a peer opening/closing my hand, and of cards arriving in an open
+ * hand: publish the reveals so they match the flag. Idempotent — only cards
+ * whose published state disagrees get an event.
+ */
+export function syncOpenHand(on: boolean): void {
+  const events = handRevealEvents(on);
+  if (events.length) sendState(events);
 }
 
 // --- Library operations -----------------------------------------------------
