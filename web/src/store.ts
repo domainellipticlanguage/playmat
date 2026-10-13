@@ -216,8 +216,10 @@ export const useGame = create<GameStore>((set, get) => ({
         if (deriveLog) {
           const mover = state.players.find((p) => p.playerId === ev.by)?.name ?? 'Someone';
           const name = cardName(state.pool, ev.card.guid, ev.card.faceDown && !prev);
+          // Only tokens get a removal line: a mid-game deck swap tombstones a
+          // whole deck at once, which would otherwise flood the log.
           if (ev.card.del) {
-            patch.log = [...state.log.slice(-499), { kind: 'zone', text: `${mover} removed ${name}`, ts: Date.now() }];
+            if (state.pool[ev.card.guid]?.isToken) patch.log = [...state.log.slice(-499), { kind: 'zone', text: `${mover} removed ${name}`, ts: Date.now() }];
           } else if (!prev && ev.card.zone === 'battlefield') {
             patch.log = [...state.log.slice(-499), { kind: 'zone', text: `${mover} put ${name} onto the battlefield`, ts: Date.now() }];
           } else if (prev && prev.zone !== ev.card.zone) {

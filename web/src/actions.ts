@@ -1101,21 +1101,31 @@ export function resetGame(): void {
 // --- Deck import + per-game setup -------------------------------------------
 
 /**
- * Broadcast my pool and set up my side. Bumps gameId (table-wide new game)
- * only when I re-import over a deck already in play. Pool chunks precede the
- * room event so the game-change side effect always sees the NEW deck.
+ * Broadcast my pool and set up my side. Starts a game only when there isn't
+ * one yet; re-importing mid-game swaps just MY deck — my old cards leave the
+ * table (wherever they are), the new deck is dealt, and everyone else's board,
+ * life, and the turn carry on. Pool chunks precede the room event so the
+ * game-change side effect always sees the NEW deck.
  */
 export function importDeck(cards: PoolCard[]): void {
   const { s, me, myName } = ctx();
   const alreadyPlaying = Object.values(s.pool).some((p) => p.ownerId === me && !p.isToken);
-  const bumpGame = !s.room?.gameId || alreadyPlaying;
+  const bumpGame = !s.room?.gameId;
   const gameId = bumpGame ? newGuid() : s.room!.gameId;
+  // Mid-game swap: tombstone my old deck's public cards BEFORE the new pool
+  // lands, so peers never hold a card whose pool entry has vanished.
+  const swapping = !bumpGame && alreadyPlaying && s.setupGameId === gameId;
   // importId must be lexicographically GREATER than any previous import of
   // mine — two imports in the same millisecond would otherwise race.
   let importId = `${Date.now().toString(36)}-${newGuid().slice(0, 8)}`;
   const prevImport = s.poolImports[me];
   if (prevImport && importId <= prevImport) importId = `${prevImport}1`;
   const events: StateEvent[] = [];
+  if (swapping) {
+    for (const c of Object.values(s.cards)) {
+      if (c.ownerId === me && !c.del && !s.pool[c.guid]?.isToken) events.push(cardEvent({ ...c, del: true }));
+    }
+  }
 
   const CHUNK = 15;
   const nChunks = Math.ceil(cards.length / CHUNK) || 1;
@@ -1136,10 +1146,17 @@ export function importDeck(cards: PoolCard[]): void {
   }
   events.push({
     t: 'log', g: gameId, by: me, seq: nextLogSeq(),
-    entry: { kind: 'note', text: `${myName} chose a deck (${cards.length} cards)`, ts: Date.now() },
+    entry: {
+      kind: 'note',
+      text: swapping
+        ? `${myName} swapped to a new deck (${cards.length} cards)`
+        : `${myName} chose a deck (${cards.length} cards)`,
+      ts: Date.now(),
+    },
   });
   sendState(events);
-  runNewGameSetup(gameId);
+  if (swapping) dealMySide(gameId, { freshPlayer: false });
+  else runNewGameSetup(gameId);
 }
 
 /**
@@ -1149,10 +1166,21 @@ export function importDeck(cards: PoolCard[]): void {
 export function runNewGameSetup(gameId: string): void {
   const { s, me } = ctx();
   if (!gameId || s.setupGameId === gameId || s.session?.seat === null) return;
+  if (!Object.values(s.pool).some((p) => p.ownerId === me && !p.isToken)) return;
+  dealMySide(gameId, { freshPlayer: true });
+}
+
+/**
+ * Deal my pool: shuffled library, opening hand, commanders to the command
+ * zone. `freshPlayer` resets life/counters (new game); a mid-game deck swap
+ * keeps them.
+ */
+function dealMySide(gameId: string, { freshPlayer }: { freshPlayer: boolean }): void {
+  const { s, me } = ctx();
   const mine = Object.values(s.pool).filter((p) => p.ownerId === me && !p.isToken);
   if (mine.length === 0) return;
   s.markSetupDone(gameId);
-  clearUndo(); // new game: nothing before shuffle-up is undoable
+  clearUndo(); // new deck: nothing before shuffle-up is undoable
 
   const commanders = mine.filter((p) => p.commander);
   const shuffledDeck = shuffled(mine.filter((p) => !p.commander).map((p) => p.guid));
@@ -1173,12 +1201,11 @@ export function runNewGameSetup(gameId: string): void {
   // color made players snap back to their seat-default color at shuffle-up.
   events.push(
     playerEvent(
-      myPlayerState({
-        life: s.prefs.defaultLife,
-        counters: {},
-        commanderDamage: {},
-        topRevealed: null,
-      })
+      myPlayerState(
+        freshPlayer
+          ? { life: s.prefs.defaultLife, counters: {}, commanderDamage: {}, topRevealed: null }
+          : { topRevealed: null }
+      )
     )
   );
   syncHandReveals(events);

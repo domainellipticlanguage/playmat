@@ -111,12 +111,39 @@ describe('deck import + setup', () => {
     const g1 = useGame.getState().room?.gameId;
     actions.importDeck(mkPool(5).map((c) => ({ ...c, guid: `n${c.guid}` })));
     const s = useGame.getState();
-    expect(s.room?.gameId).not.toBe(g1); // re-import bumps the game
+    expect(s.room?.gameId).toBe(g1); // re-import swaps my deck, not the game
     const mine = Object.values(s.pool).filter((p) => p.ownerId === ME);
     expect(mine.map((p) => p.guid).sort()).toEqual(['nc0', 'nc1', 'nc2', 'nc3', 'nc4']);
     // 5-card deck: all 5 dealt into the opening hand, library empty.
     expect(s.hidden.hand).toHaveLength(5);
     expect(s.hidden.library).toHaveLength(0);
+  });
+
+  it('mid-game deck swap leaves the rest of the table alone', () => {
+    const pool = mkPool(10);
+    pool[0].commander = true;
+    actions.importDeck(pool);
+    const g1 = useGame.getState().room!.gameId;
+    // A foe's permanent, my turn marker, and a life change already in play.
+    useGame.getState().applyStateEvent({
+      t: 'card', g: g1, by: FOE, seq: 1,
+      card: { guid: 'foeCard', zone: 'battlefield', ownerId: FOE, controllerId: FOE, x: 0, y: 0, z: 0, tapped: false, faceDown: false, faceIndex: 0, rotIndex: 0, counters: {}, order: 0 },
+    });
+    actions.takeTurn();
+    actions.setLife(ME, 35);
+    const turnBefore = useGame.getState().room!.turn;
+
+    actions.importDeck(mkPool(8).map((c) => ({ ...c, guid: `n${c.guid}` })));
+    const s = useGame.getState();
+    expect(s.room?.gameId).toBe(g1);
+    expect(s.room?.turn).toBe(turnBefore);
+    expect(s.cards['foeCard']).toBeDefined();
+    expect(s.cards['c0']).toBeUndefined(); // old commander left the table
+    expect(Object.values(s.cards).some((c) => c.ownerId === ME && c.guid.startsWith('c'))).toBe(false);
+    expect([...s.hidden.library, ...s.hidden.hand].sort()).toEqual(
+      ['nc0', 'nc1', 'nc2', 'nc3', 'nc4', 'nc5', 'nc6', 'nc7']
+    );
+    expect(s.playerStates[ME].life).toBe(35); // life survives the swap
   });
 
   it('mulligan shuffles the hand back and draws 7 again', () => {
