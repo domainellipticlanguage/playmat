@@ -260,9 +260,10 @@ export function Table() {
               Untap
             </button>
             {/* Free-for-all by design: anyone may take the turn at any time.
-                Holding it swaps the button to "Pass turn", which only moves
-                the marker — the next player still untaps/draws themself. */}
-            {room?.turnPlayerId === me ? (
+                Taking it swaps the button to "Pass turn", which only moves
+                the marker — the recipient still sees "Take turn" until they
+                untap/draw themself. */}
+            {room?.turnPlayerId === me && room?.turnStarted !== false ? (
               <button
                 className="small"
                 onClick={() => actions.passTurn()}

@@ -1089,7 +1089,7 @@ export const takeTurn = undoable('take turn', (): void => {
   const alreadyMine = s.room?.turnPlayerId === me;
   const turn = (s.room?.turn ?? 0) + (alreadyMine ? 0 : 1);
   sendState([
-    roomEvent({ gameId: s.room?.gameId ?? '', turnPlayerId: me, turn }),
+    roomEvent({ gameId: s.room?.gameId ?? '', turnPlayerId: me, turn, turnStarted: true }),
     logEvent({ kind: 'turn', text: `${myName} took turn ${turn} (untap, upkeep, draw)` }),
   ]);
 });
@@ -1106,7 +1106,12 @@ export const passTurn = undoable('pass turn', (): void => {
   const next = seated[(i + 1) % seated.length];
   if (!next || next.playerId === me) return;
   sendState([
-    roomEvent({ gameId: s.room?.gameId ?? '', turnPlayerId: next.playerId, turn: (s.room?.turn ?? 0) + 1 }),
+    roomEvent({
+      gameId: s.room?.gameId ?? '',
+      turnPlayerId: next.playerId,
+      turn: (s.room?.turn ?? 0) + 1,
+      turnStarted: false,
+    }),
     logEvent({ kind: 'turn', text: `${myName} passed the turn to ${next.name}` }),
   ]);
 });

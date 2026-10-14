@@ -393,6 +393,25 @@ describe('game state', () => {
     expect(s.room?.turn).toBe(3);
   });
 
+  it('a passed turn arrives unstarted; taking it starts it without a recount', () => {
+    actions.takeTurn();
+    // Foe passes the marker to me (as their client would publish it).
+    let s = useGame.getState();
+    s.applyStateEvent({
+      t: 'room', g: s.room!.gameId, by: FOE, seq: s.seqs['room'].seq + 1,
+      room: { gameId: s.room!.gameId, turnPlayerId: ME, turn: 2, turnStarted: false },
+    });
+    expect(useGame.getState().room?.turnStarted).toBe(false); // UI shows Take turn
+    actions.takeTurn();
+    s = useGame.getState();
+    expect(s.room?.turnStarted).toBe(true); // UI swaps to Pass turn
+    expect(s.room?.turn).toBe(2);
+    actions.passTurn();
+    s = useGame.getState();
+    expect(s.room?.turnPlayerId).toBe(FOE);
+    expect(s.room?.turnStarted).toBe(false);
+  });
+
   it('lands slot into the edge row, spells into the center row, taken slots skip', () => {
     const land: PoolCard = {
       guid: 'land1', ownerId: ME,

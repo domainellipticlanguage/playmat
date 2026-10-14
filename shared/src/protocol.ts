@@ -142,6 +142,12 @@ export interface RoomState {
    * Optional so snapshots written before this field still load.
    */
   turn?: number;
+  /**
+   * False when the marker was passed and the holder hasn't taken the turn
+   * (untap/draw) yet — they still need the Take-turn button. Absent means
+   * started (older snapshots, take-turn itself).
+   */
+  turnStarted?: boolean;
 }
 
 /** One face of a resolved card (Scryfall-derived). */
