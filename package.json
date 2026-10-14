@@ -16,6 +16,7 @@
     "test": "npm run test -w shared --if-present && npm run test -w web --if-present && npm run test -w local-server --if-present",
  "test:mobile": "node scripts/mobile-smoke.mjs",
     "test:gestures": "node scripts/gesture-smoke.mjs",
+    "bench:perf": "node scripts/perf-bench.mjs",
     "deploy": "node scripts/deploy.mjs"
   },
   "devDependencies": {

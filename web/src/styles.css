@@ -270,17 +270,26 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   background-image:
     var(--table-image, url(/table.jpg)),
     radial-gradient(ellipse at center, #3a2b18 0%, #241a0e 100%);
-  /* Its own compositor layer, like .tcard: the GPU texture is retained
-     across pan frames instead of re-rasterized inside .world's tiles. */
+  /* Its own compositor layer: the GPU texture is retained across pan frames
+     instead of re-rasterized inside .world's tiles. */
   will-change: transform;
 }
 
+/* No per-card will-change: cards paint into .world's layer, which pans and
+   zooms as one. A layer per card (×3 with crucible's 3D + rounded masks, see
+   below) put ~270 layers on a busy table — GPU memory pressure, seams and
+   tearing — and measured no smoother. Moving cards get promoted by Chrome on
+   their own for the transition. */
 .tcard {
   position: absolute;
-  will-change: transform;
   transition: transform 140ms ease;
   cursor: grab;
 }
+/* Crucible's flip machinery (perspective + preserve-3d) is unused here —
+   Playmat drives faces and rotation itself — but it made every card a 3D
+   rendering context with its own composited layers. Flatten it. */
+.tcard .mtg-card-viewport { perspective: none !important; }
+.tcard .mtg-card-transform { transform-style: flat !important; transition: none !important; }
 /* z-index stays inline (per-card stacking + drag lift) — no override here. */
 .tcard.dragging { transition: none; cursor: grabbing; }
 .tcard.remote-drag { transition: transform 150ms linear; opacity: 0.85; }
