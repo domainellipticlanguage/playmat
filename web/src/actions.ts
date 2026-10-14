@@ -640,7 +640,8 @@ export const moveCard = undoable('move card', (guid: string, target: MoveTarget)
     counters: leavingBattlefield ? (cur.counters.tax ? { tax: cur.counters.tax } : {}) : cur.counters,
     manifest: leavingBattlefield || target.faceDown === false ? undefined : cur.manifest,
     // A new object when it comes back: creature-ness starts over.
-    nonCreature: leavingBattlefield ? undefined : cur.nonCreature,
+    creature: leavingBattlefield ? undefined : cur.creature,
+    basePT: leavingBattlefield ? undefined : cur.basePT,
     revealed: false,
     order: ['graveyard', 'exile', 'command'].includes(target.zone) ? topOrder(target.zone, zoneOwnerId) : 0,
     libPos: target.zone === 'library' ? target.libPos ?? 'top' : undefined,
@@ -811,10 +812,13 @@ export const setFaceDown = undoable('flip', (guid: string, faceDown: boolean): v
   sendState([cardEvent({ ...currentCard(guid), faceDown, manifest: faceDown ? currentCard(guid).manifest : undefined })]);
 });
 
-/** Printed P/T but not a creature right now: hide its P/T (see CardState). */
-export const setNonCreature = undoable('creature status', (guid: string, nonCreature: boolean): void => {
-  sendState([cardEvent({ ...currentCard(guid), nonCreature: nonCreature || undefined })]);
-});
+/** Creature / base P/T overrides (see CardState); undefined = as printed. */
+export const setCreatureStatus = undoable(
+  'creature status',
+  (guid: string, creature: boolean | undefined, basePT: { p: string; t: string } | undefined): void => {
+    sendState([cardEvent({ ...currentCard(guid), creature, basePT })]);
+  }
+);
 
 /** Mark a face-down card as a 2/2 creature (manifest, morph, disguise…). */
 export const setManifest = undoable('manifest', (guid: string, manifest: boolean): void => {

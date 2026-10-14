@@ -52,11 +52,14 @@ export interface CardState {
    */
   manifest?: boolean;
   /**
-   * Printed P/T but not a creature right now (a Glimmer back as an
-   * enchantment, an uncrewed Vehicle if you're strict): no P/T shows — a
-   * noncreature permanent has none (CR 208.3). Cleared off the battlefield.
+   * Creature override. true animates a non-creature (manland, Tezzeret,
+   * March of the Machines); false un-creatures a printed one (a Glimmer back
+   * as an enchantment) — a noncreature permanent has no P/T (CR 208.3).
+   * Unset = as printed. Cleared off the battlefield.
    */
-  nonCreature?: boolean;
+  creature?: boolean;
+  /** Base power/toughness override, before counters. Unset = as printed. */
+  basePT?: { p: string; t: string };
   /** Which face is showing for multi-face cards (0 = front). */
   faceIndex: number;
   /** Index into the card's crucible rotations array. */

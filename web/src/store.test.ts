@@ -192,19 +192,20 @@ describe('planeswalkers', () => {
   });
 });
 
-describe('non-creature toggle', () => {
+describe('creature status + base P/T', () => {
   it('sticks on the battlefield and clears when the card leaves', () => {
     actions.importDeck(mkPool(10));
     const g = useGame.getState().hidden.hand[0];
     actions.playFromHand(g, 500, 1900);
-    actions.setNonCreature(g, true);
-    expect(useGame.getState().cards[g].nonCreature).toBe(true);
+    actions.setCreatureStatus(g, true, { p: '5', t: '5' }); // animate it
+    expect(useGame.getState().cards[g]).toMatchObject({ creature: true, basePT: { p: '5', t: '5' } });
     actions.moveCard(g, { zone: 'battlefield', x: 700, y: 1900 }); // still on the table
-    expect(useGame.getState().cards[g].nonCreature).toBe(true);
+    expect(useGame.getState().cards[g].creature).toBe(true);
     actions.moveCard(g, { zone: 'graveyard' });
-    expect(useGame.getState().cards[g].nonCreature).toBeUndefined();
+    expect(useGame.getState().cards[g].creature).toBeUndefined();
+    expect(useGame.getState().cards[g].basePT).toBeUndefined();
     actions.undoLast();
-    expect(useGame.getState().cards[g].nonCreature).toBe(true);
+    expect(useGame.getState().cards[g]).toMatchObject({ creature: true, basePT: { p: '5', t: '5' } });
   });
 });
 

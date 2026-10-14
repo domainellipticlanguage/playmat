@@ -7,7 +7,8 @@ import {
   displayDataFor,
   useSleeveUrl,
   effectivePT,
-  faceAt,
+  isCreatureNow,
+  printedPT,
   hasRotationStates,
   useCustomDisplay,
   zRotation,
@@ -47,13 +48,16 @@ function menuItemsFor(card: CardState, pool: PoolCard | undefined) {
       action: () => actions.setManifest(g, !card.manifest),
     });
   }
-  const face = pool ? faceAt(pool, card.rotIndex) : null;
-  const printedPT = face?.power != null || typeof pool?.custom?.power === 'string';
-  if (!card.faceDown && (printedPT || card.nonCreature)) {
-    items.push({
-      label: card.nonCreature ? 'Is a creature (show P/T)' : 'Not a creature (hide P/T)',
-      action: () => actions.setNonCreature(g, !card.nonCreature),
-    });
+  if (!card.faceDown) {
+    if (isCreatureNow(card, pool, card.rotIndex)) {
+      items.push({ label: 'Not a creature (hide P/T)', action: () => actions.setCreatureStatus(g, false, card.basePT) });
+    } else {
+      items.push({
+        label: 'Make it a creature…',
+        action: () => useUI.getState().openModal({ kind: 'creature', guid: g, makeCreature: true }),
+      });
+    }
+    items.push({ label: 'Creature & P/T…', action: () => useUI.getState().openModal({ kind: 'creature', guid: g }) });
   }
   if (pool && hasRotationStates(pool)) {
     const n = cardRotations(pool).length;
@@ -187,21 +191,17 @@ export const TableCard = memo(function TableCard({
   const pos = dragPos ?? remoteDrag ?? { x: card.x, y: card.y };
   const baseAngle = faceAngleOverride ?? seatAngle(seatOfController);
   const angle = baseAngle + (card.tapped ? 90 : 0) + (pool ? zRotation(pool, card.rotIndex) : 0);
-  const face = pool ? faceAt(pool, card.rotIndex) : null;
   const customDisplay = useCustomDisplay(pool);
-  const pt = card.nonCreature && !card.faceDown
-    ? null
-    : card.faceDown
+  const creatureNow = !card.faceDown && isCreatureNow(card, pool, card.rotIndex);
+  const base = card.basePT ?? printedPT(pool, card.rotIndex);
+  const pt = card.faceDown
     ? card.manifest
       ? effectivePT({ name: '', img: '', power: '2', toughness: '2' }, card.counters)
       : null
-    : effectivePT(face, card.counters) ??
-      (pool?.custom && typeof pool.custom.power === 'string' && typeof pool.custom.toughness === 'string'
-        ? effectivePT(
-            { name: '', img: '', power: pool.custom.power as string, toughness: pool.custom.toughness as string },
-            card.counters
-          )
-        : null);
+    : creatureNow
+      ? // Animated with no P/T given yet: show ?/? rather than nothing.
+        effectivePT({ name: '', img: '', power: base?.p ?? '?', toughness: base?.t ?? '?' }, card.counters)
+      : null;
   const back = useSleeveUrl(card.ownerId);
   const display =
     pool?.custom && !card.faceDown
@@ -256,7 +256,7 @@ export const TableCard = memo(function TableCard({
         </div>
       )}
       {pt && <span className="pt-badge">{pt.p}/{pt.t}</span>}
-      {card.nonCreature && !card.faceDown && (
+      {card.creature === false && !card.faceDown && (
         <span className="pt-badge noncreature" title="Not a creature right now — no power/toughness">
           non-creature
         </span>

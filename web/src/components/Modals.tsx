@@ -4,7 +4,7 @@ import { newGuid, parseDecklist } from '@playmat/shared';
 import { useGame } from '../store';
 import { useUI, type ModalState } from '../uiStore';
 import * as actions from '../actions';
-import { cardSearchText, deckColorIdentity, manaSymbolUrl } from '../cards';
+import { cardSearchText, deckColorIdentity, isCreatureNow, manaSymbolUrl, printedPT } from '../cards';
 import { PLAYER_PALETTE, paletteColor } from '../colors';
 import { resolveDeckByNames, resolveByIds, searchTokens, toPoolCard, type ScryfallCard } from '../scryfall';
 import { fetchArchidektDeck, parseArchidektUrl } from '../archidekt';
@@ -486,6 +486,72 @@ function PlaymatFramer({
       </div>
       <span className="subtle">Drag to move · scroll or slide to zoom · anything the image doesn't cover is black.</span>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Creature status + base P/T (animate a land/artifact, un-creature a Glimmer)
+// ---------------------------------------------------------------------------
+
+function CreatureModal({ guid, makeCreature, onClose }: { guid: string; makeCreature?: boolean; onClose: () => void }) {
+  const pool = useGame((s) => s.pool[guid]);
+  const card = useGame.getState().cards[guid];
+  const printed = printedPT(pool, card?.rotIndex ?? 0);
+  const name = pool?.sf?.name ?? (pool?.custom?.name as string | undefined) ?? 'card';
+  const [creature, setCreature] = useState(() => makeCreature || (card ? isCreatureNow(card, pool, card.rotIndex) : false));
+  const start = card?.basePT ?? printed;
+  const [p, setP] = useState(start?.p ?? '');
+  const [t, setT] = useState(start?.t ?? '');
+  const counters = card?.counters ?? {};
+  const delta = (counters['+1/+1'] ?? 0) - (counters['-1/-1'] ?? 0);
+
+  const save = () => {
+    if (!card) return onClose();
+    // Store only what differs from the printed card, so "as printed" stays unset.
+    const creatureOverride = creature === (printed != null) ? undefined : creature;
+    const pp = p.trim();
+    const tt = t.trim();
+    const base = pp && tt && !(printed && printed.p === pp && printed.t === tt) ? { p: pp, t: tt } : undefined;
+    actions.setCreatureStatus(guid, creatureOverride, base);
+    onClose();
+  };
+  const onEnter = (e: React.KeyboardEvent) => e.key === 'Enter' && save();
+
+  return (
+    <Backdrop onClose={onClose}>
+      <div className="modal-head">
+        <h3>Creature &amp; P/T — {name}</h3>
+        <button className="modal-close" onClick={onClose} title="Close" aria-label="Close">✕</button>
+      </div>
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input type="checkbox" checked={creature} onChange={(e) => setCreature(e.target.checked)} />
+        Is a creature
+        <span className="subtle">{printed ? `(printed ${printed.p}/${printed.t})` : '(not printed as one)'}</span>
+      </label>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', opacity: creature ? 1 : 0.4 }}>
+        Base P/T
+        <input autoFocus={creature} disabled={!creature} value={p} onChange={(e) => setP(e.target.value)} onKeyDown={onEnter} style={{ width: 56, textAlign: 'center' }} placeholder="P" />
+        /
+        <input disabled={!creature} value={t} onChange={(e) => setT(e.target.value)} onKeyDown={onEnter} style={{ width: 56, textAlign: 'center' }} placeholder="T" />
+        {printed && (
+          <button className="small" disabled={!creature} onClick={() => { setP(printed.p); setT(printed.t); }}>
+            printed
+          </button>
+        )}
+      </div>
+      <div className="subtle">
+        {creature
+          ? delta !== 0
+            ? `Counters still apply on top (${delta > 0 ? '+' : ''}${delta}/${delta > 0 ? '+' : ''}${delta}).`
+            : '+1/+1 and −1/−1 counters apply on top.'
+          : 'Not a creature: no power or toughness shows.'}{' '}
+        Resets when the card leaves the battlefield.
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        <button onClick={onClose}>Cancel</button>
+        <button className="primary" onClick={save}>Save</button>
+      </div>
+    </Backdrop>
   );
 }
 
@@ -1425,6 +1491,8 @@ export function ModalHost() {
       return <ZoneModal zone={modal.zone} zoneOwnerId={modal.zoneOwnerId} onClose={close} />;
     case 'card':
       return <CardPeekModal guid={modal.guid} onClose={close} />;
+    case 'creature':
+      return <CreatureModal guid={modal.guid} makeCreature={modal.makeCreature} onClose={close} />;
     case 'counters':
       return <CountersModal guid={modal.guid} guids={modal.guids} onClose={close} />;
     case 'tokens':

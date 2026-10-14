@@ -274,6 +274,23 @@ export function useCustomDisplay(pool: PoolCard | undefined): MtgCardDisplayData
  * Effective power/toughness with +1/+1 and -1/-1 counters (Archidekt-style
  * convenience). Non-numeric bases like star/star render as base±n.
  */
+/** Printed P/T of the showing face (or a custom token's), if any. */
+export function printedPT(pool: PoolCard | undefined, rotIndex: number): { p: string; t: string } | null {
+  const face = pool ? faceAt(pool, rotIndex) : null;
+  if (face?.power != null && face.toughness != null) return { p: face.power, t: face.toughness };
+  const c = pool?.custom;
+  if (c && typeof c.power === 'string' && typeof c.toughness === 'string') return { p: c.power, t: c.toughness };
+  return null;
+}
+
+/**
+ * Does this permanent show P/T right now? Explicit override wins; otherwise
+ * anything with printed P/T does (creatures, and Vehicles — loosely).
+ */
+export function isCreatureNow(card: { creature?: boolean }, pool: PoolCard | undefined, rotIndex: number): boolean {
+  return card.creature ?? printedPT(pool, rotIndex) != null;
+}
+
 export function effectivePT(
   face: PoolFace | null,
   counters: Record<string, number>

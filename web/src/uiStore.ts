@@ -25,6 +25,8 @@ export type ModalState =
   /** Edit counters on one card, or set them on every card of a selection.
    * `guid` is the card whose counters seed the editor. */
   | { kind: 'counters'; guid: string; guids: string[] }
+  /** Creature status + base P/T. makeCreature pre-ticks "is a creature". */
+  | { kind: 'creature'; guid: string; makeCreature?: boolean }
   | { kind: 'confirm'; title: string; body: string; onConfirm: () => void }
   | { kind: 'import' }
   | { kind: 'prefs' }
