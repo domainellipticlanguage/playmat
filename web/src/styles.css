@@ -548,6 +548,30 @@ button.turn-pending { background: #3a2f10; border-color: var(--accent); color: v
   color: var(--ink);
 }
 .life .stack { display: flex; flex-direction: column; gap: 2px; }
+/* Running total of recent life changes, floating over the life number. */
+.life .total { position: relative; }
+.life-delta {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: bold;
+  white-space: nowrap;
+  pointer-events: none;
+  /* A pill, so it stays legible where it overlaps the name row. */
+  padding: 0 6px;
+  border-radius: 9px;
+  background: var(--panel);
+  border: 1px solid currentColor;
+  z-index: 2;
+  animation: life-delta-pop 160ms ease-out;
+}
+.life-delta.up, .life-delta-inline.up { color: var(--ok); }
+.life-delta.down, .life-delta-inline.down { color: var(--danger); }
+.life-delta-inline { font-weight: bold; }
+@keyframes life-delta-pop { from { transform: translateX(-50%) scale(1.35); } to { transform: translateX(-50%) scale(1); } }
 .pcounters { display: flex; gap: 4px; flex-wrap: wrap; font-size: 12px; }
 .pcounter { background: #1e1e1e; border: 1px solid var(--panel-border); border-radius: 8px; padding: 1px 7px; cursor: pointer; }
 .cmdr-dmg { font-size: 11px; display: flex; flex-direction: column; gap: 2px; }

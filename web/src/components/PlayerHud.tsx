@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { PlayerState, PoolCard, SeatRecord, ZoneName } from '@playmat/shared';
 import { useGame } from '../store';
@@ -106,6 +106,48 @@ function usePileDrag() {
   return { ghost, start, move, end, cancel, guardClick };
 }
 
+/** How long a life change's running total lingers after the last change. */
+const LIFE_DELTA_MS = 3000;
+
+/**
+ * Running total of recent life changes (life-tracker style): −1, −1, −3
+ * shows "−5", refreshed on each change and gone LIFE_DELTA_MS after the
+ * last. Starts only from a published life total (no "+40" on join) and
+ * resets with the game.
+ */
+function useLifeDelta(life: number | undefined, gameId: string | undefined): number | null {
+  const [delta, setDelta] = useState<number | null>(null);
+  const prev = useRef(life);
+  const base = useRef<number | null>(null);
+  const game = useRef(gameId);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const was = prev.current;
+    prev.current = life;
+    if (game.current !== gameId || life == null || was == null) {
+      game.current = gameId;
+      base.current = null;
+      setDelta(null);
+      return;
+    }
+    if (life === was) return;
+    if (base.current == null) base.current = was;
+    setDelta(life - base.current);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      base.current = null;
+      setDelta(null);
+    }, LIFE_DELTA_MS);
+  }, [life, gameId]);
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current);
+  }, []);
+  return delta;
+}
+
+const fmtDelta = (d: number) => (d > 0 ? `+${d}` : d < 0 ? `−${-d}` : '±0');
+const deltaClass = (d: number) => (d > 0 ? 'up' : d < 0 ? 'down' : '');
+
 export function PlayerHud({ player }: { player: SeatRecord }) {
   const session = useGame((s) => s.session);
   const ps = useGame((s) => s.playerStates[player.playerId]);
@@ -120,6 +162,7 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
   const edge = relativeEdge(player.seat, session?.seat ?? null);
   const pid = player.playerId;
 
+  const lifeDelta = useLifeDelta(ps?.life, room?.gameId);
   const state: PlayerState = ps ?? {
     playerId: pid,
     seat: player.seat,
@@ -437,7 +480,10 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
           <span className="player-chip" style={{ background: paletteColor(state.color, player.seat).hex }} />
           <b>{player.name}</b>
           {room?.turnPlayerId === pid && <span className="turn-badge">▶ turn</span>}
-          <span className="mini-stat" title="life">♥ {state.life}</span>
+          <span className="mini-stat" title="life">
+            ♥ {state.life}
+            {lifeDelta != null && <span className={`life-delta-inline ${deltaClass(lifeDelta)}`}> {fmtDelta(lifeDelta)}</span>}
+          </span>
           <span className="mini-stat" title="cards in hand">✋ {handCount}</span>
           <span className="mini-stat" title="cards in library">🂠 {libraryCount}</span>
         </div>
@@ -493,6 +539,9 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
               }}
             >
               {state.life}
+              {lifeDelta != null && (
+                <span key={lifeDelta} className={`life-delta ${deltaClass(lifeDelta)}`}>{fmtDelta(lifeDelta)}</span>
+              )}
             </div>
             <div className="stack">
               <button className="small" onClick={() => lifeAdjust(1)}>+1</button>
