@@ -75,7 +75,7 @@ function menuItemsFor(card: CardState, pool: PoolCard | undefined) {
     items.push({ label: `▲ ${label} (${n})`, keepOpen: true, action: () => actions.setCounter(g, label, n + 1) });
     items.push({ label: `▼ ${label} (${n})`, keepOpen: true, action: () => actions.setCounter(g, label, n - 1) });
   }
-  items.push({ label: 'Copy as token', action: () => actions.copyCardAsToken(g, { x: card.x + 40, y: card.y + 20 }) });
+  items.push({ label: pool?.isToken ? 'Copy token' : 'Copy as token', action: () => actions.copyCardAsToken(g, { x: card.x + 40, y: card.y + 20 }) });
   items.push({ label: 'To hand', action: () => actions.moveCard(g, { zone: 'hand' }) });
   items.push({ label: 'To graveyard', action: () => actions.moveCard(g, { zone: 'graveyard' }) });
   items.push({ label: 'To exile', action: () => actions.moveCard(g, { zone: 'exile' }) });

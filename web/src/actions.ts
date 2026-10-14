@@ -1063,7 +1063,10 @@ export const copyCardAsToken = undoable('copy as token', (guid: string, at: { x:
   if (!src) return;
   const token: PoolCard = s.cards[guid]?.faceDown
     ? { guid: newGuid(), ownerId: me, isToken: true, sf: FACE_DOWN_TOKEN }
-    : { guid: newGuid(), ownerId: me, isToken: true, custom: tokenDataFrom(src) };
+    : src.isToken
+      ? // A token copies as itself — same Scryfall printing or custom face.
+        { ...src, guid: newGuid(), ownerId: me, commander: undefined }
+      : { guid: newGuid(), ownerId: me, isToken: true, custom: tokenDataFrom(src) };
   createTokens([token], at);
 });
 

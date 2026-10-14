@@ -673,6 +673,18 @@ describe('undo/redo', () => {
     expect(JSON.stringify(tok)).not.toContain('Card 9');
   });
 
+  it('copying a Scryfall token copies it as-is (no crucible re-render)', () => {
+    actions.importDeck(mkPool(5));
+    const tok = { guid: 'tk', ownerId: ME, isToken: true, sf: { id: 'soldier', name: 'Soldier', layout: 'token', faces: [{ name: 'Soldier', img: 'soldier.jpg', type: 'Token Creature — Soldier', power: '1', toughness: '1' }] } };
+    actions.createTokens([tok], { x: 10, y: 10 });
+    const before = new Set(Object.keys(useGame.getState().pool));
+    actions.copyCardAsToken('tk', { x: 50, y: 50 });
+    const copy = Object.values(useGame.getState().pool).find((p) => !before.has(p.guid))!;
+    expect(copy.sf).toEqual(tok.sf);
+    expect(copy.custom).toBeUndefined();
+    expect(copy.isToken).toBe(true);
+  });
+
   it('token create → delete → undo ×2 round-trips through resurrection', () => {
     actions.createTokens([{ guid: 'tok1', ownerId: ME, isToken: true, custom: { name: 'Tok' } }], { x: 5, y: 6 });
     expect(useGame.getState().cards['tok1'].zone).toBe('battlefield');
