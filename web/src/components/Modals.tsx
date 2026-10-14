@@ -333,6 +333,8 @@ function TokenModal({ at, onClose }: { at: { x: number; y: number }; onClose: ()
   const [q, setQ] = useState('');
   const [results, setResults] = useState<ScryfallCard[]>([]);
   const [busy, setBusy] = useState(false);
+  // What the shown results answer, so an empty grid can say so explicitly.
+  const [searched, setSearched] = useState<{ term: string; failed: boolean } | null>(null);
   const [custom, setCustom] = useState({ name: 'Token', typeLine: 'Token Creature — Shape', power: '1', toughness: '1', abilities: '', artUrl: '' });
   const [colors, setColors] = useState<string[]>([]);
 
@@ -369,8 +371,10 @@ function TokenModal({ at, onClose }: { at: { x: number; y: number }; onClose: ()
     setBusy(true);
     try {
       setResults(await searchTokens(term));
+      setSearched({ term, failed: false });
     } catch {
       setResults([]);
+      setSearched({ term, failed: true });
     } finally {
       setBusy(false);
     }
@@ -415,6 +419,11 @@ function TokenModal({ at, onClose }: { at: { x: number; y: number }; onClose: ()
             />
             <button disabled={busy || !q.trim()} onClick={() => void search(q)}>{busy ? '…' : 'Search'}</button>
           </div>
+          {!busy && searched && results.length === 0 && (
+            <div className="subtle">
+              {searched.failed ? `Search failed for “${searched.term}” — try again.` : `No results for “${searched.term}”.`}
+            </div>
+          )}
           <div className="card-grid">
             {results.map((card) => (
               <div key={card.id} className="gcard">

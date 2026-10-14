@@ -1020,12 +1020,35 @@ function tokenDataFrom(src: PoolCard): Record<string, unknown> {
   return data;
 }
 
+/**
+ * Copying a face-down permanent copies nothing but a nameless 2/2 creature —
+ * never the hidden card. Scryfall's Manifest reminder token (Fate Reforged)
+ * is exactly that card.
+ */
+const FACE_DOWN_TOKEN: NonNullable<PoolCard['sf']> = {
+  id: 'e9f896d4-34b4-407d-be7e-bf7a69aaf811',
+  name: 'Manifest',
+  layout: 'token',
+  faces: [
+    {
+      name: 'Manifest',
+      img: 'https://cards.scryfall.io/normal/front/e/9/e9f896d4-34b4-407d-be7e-bf7a69aaf811.jpg?1783938662',
+      type: 'Creature',
+      power: '2',
+      toughness: '2',
+    },
+  ],
+};
+
 /** Token copy of an existing card (C-7), rendered as a crucible token face. */
 export const copyCardAsToken = undoable('copy as token', (guid: string, at: { x: number; y: number }): void => {
   const { s, me } = ctx();
   const src = s.pool[guid];
   if (!src) return;
-  createTokens([{ guid: newGuid(), ownerId: me, isToken: true, custom: tokenDataFrom(src) }], at);
+  const token: PoolCard = s.cards[guid]?.faceDown
+    ? { guid: newGuid(), ownerId: me, isToken: true, sf: FACE_DOWN_TOKEN }
+    : { guid: newGuid(), ownerId: me, isToken: true, custom: tokenDataFrom(src) };
+  createTokens([token], at);
 });
 
 export const removeToken = undoable('remove token', (guid: string): void => {

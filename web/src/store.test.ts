@@ -618,6 +618,22 @@ describe('undo/redo', () => {
     expect(useGame.getState().hidden.library).toEqual(lib0);
   });
 
+  it('copying a face-down card makes a Manifest token, not the hidden card', () => {
+    actions.importDeck(mkPool(10));
+    const g = useGame.getState().room!.gameId;
+    useGame.getState().applyStateEvent({
+      t: 'card', g, by: FOE, seq: 1,
+      card: { guid: 'c9', zone: 'battlefield', ownerId: ME, controllerId: ME, x: 0, y: 0, z: 0, tapped: false, faceDown: true, faceIndex: 0, rotIndex: 0, counters: {}, order: 0 },
+    });
+    const before = new Set(Object.keys(useGame.getState().pool));
+    actions.copyCardAsToken('c9', { x: 10, y: 10 });
+    const tok = Object.values(useGame.getState().pool).find((p) => !before.has(p.guid))!;
+    expect(tok.isToken).toBe(true);
+    expect(tok.sf?.name).toBe('Manifest');
+    expect(tok.custom).toBeUndefined();
+    expect(JSON.stringify(tok)).not.toContain('Card 9');
+  });
+
   it('token create → delete → undo ×2 round-trips through resurrection', () => {
     actions.createTokens([{ guid: 'tok1', ownerId: ME, isToken: true, custom: { name: 'Tok' } }], { x: 5, y: 6 });
     expect(useGame.getState().cards['tok1'].zone).toBe('battlefield');
