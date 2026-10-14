@@ -30,6 +30,9 @@ export function Hand() {
    * pointer-events:none inner layer, so hit boxes never move under the cursor
    * — moving them (margins) made hover flip between cards in a loop. */
   const [hovered, setHovered] = useState<string | null>(null);
+  /** Client-only: fold the fan down to a row of card tops (big hands bury
+   * the battlefield). A live drag that could land here unfolds it. */
+  const [collapsed, setCollapsed] = useState(false);
 
   // The card being dragged out collapses (width 0) so the fan closes around
   // it — one physical card, carried by the ghost, not a ghostly double. It
@@ -196,8 +199,10 @@ export function Hand() {
   };
 
   let vi = 0; // index among visible (non-lifted) cards, what `insert` counts
-  // No pop-up while a drag is live: it would fight the insertion gap.
-  const hoverIdx = droppable || !hovered ? -1 : hand.indexOf(hovered);
+  const folded = collapsed && !droppable;
+  // No pop-up while a drag is live (it would fight the insertion gap) or while
+  // folded (the hover preview panel still shows the card).
+  const hoverIdx = droppable || folded || !hovered ? -1 : hand.indexOf(hovered);
   // How far the hovered card's neighbors slide apart: what the old 24px hover
   // margin opened up on each side.
   const spread = 24 - overlap;
@@ -205,10 +210,19 @@ export function Hand() {
     <>
       <div
         ref={stripRef}
-        className={`hand-strip${droppable ? ' drop-ready' : ''}${insert != null ? ' drop-hover' : ''}`}
+        className={`hand-strip${droppable ? ' drop-ready' : ''}${insert != null ? ' drop-hover' : ''}${folded ? ' collapsed' : ''}`}
         data-drop={`hand:${me ?? ''}`}
         style={{ '--hand-overlap': `${overlap}px` } as React.CSSProperties}
       >
+        {hand.length > 0 && (
+          <button
+            className="hand-toggle"
+            onClick={() => setCollapsed((v) => !v)}
+            title={collapsed ? 'Show your hand' : 'Fold your hand down out of the way'}
+          >
+            {collapsed ? `▴ hand (${hand.length})` : '▾'}
+          </button>
+        )}
         {hand.map((guid, i) => {
           const p = pool[guid];
           const revealed = cards[guid]?.revealed && cards[guid]?.zone === 'hand';

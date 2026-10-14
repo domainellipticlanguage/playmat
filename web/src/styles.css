@@ -656,6 +656,24 @@ button.turn-pending { background: #3a2f10; border-color: var(--accent); color: v
    the gap, and only the pointer ghost remains — one physical card. It stays
    mounted (display:none would drop its pointer capture and kill the drag). */
 .hand-card.lifted { width: 0; margin: 0; }
+/* Folded hand: only a 22px row of card tops shows (names stay readable). */
+.hand-strip.collapsed .hand-card { transform: translateY(calc(100% - 22px)); }
+/* Drawer handle just above the visible card tops, folded or not. */
+.hand-toggle {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 34px);
+  transform: translateX(-50%);
+  z-index: 6;
+  pointer-events: auto;
+  padding: 0 10px;
+  font-size: 11px;
+  line-height: 16px;
+  border-radius: 8px 8px 0 0;
+  border-bottom: none;
+  transition: bottom 120ms ease;
+}
+.hand-strip.collapsed .hand-toggle { bottom: 22px; }
 .hand-card.lifted .mtg-card { visibility: hidden; }
 /* A drag that could drop here is live: give an empty strip a landing zone,
    (Hand.tsx suppresses the hover pop-up so it can't fight the insertion gap.) */
