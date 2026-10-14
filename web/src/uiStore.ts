@@ -20,6 +20,9 @@ export type ModalState =
   | { kind: 'zone'; zone: 'graveyard' | 'exile' | 'command'; zoneOwnerId: string }
   /** Local-only look at one card (e.g. peeking a face-down card). */
   | { kind: 'card'; guid: string }
+  /** Edit counters on one card, or set them on every card of a selection.
+   * `guid` is the card whose counters seed the editor. */
+  | { kind: 'counters'; guid: string; guids: string[] }
   | { kind: 'confirm'; title: string; body: string; onConfirm: () => void }
   | { kind: 'import' }
   | { kind: 'prefs' }

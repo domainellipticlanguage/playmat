@@ -286,6 +286,111 @@ function CardPeekModal({ guid, onClose }: { guid: string; onClose: () => void })
 }
 
 // ---------------------------------------------------------------------------
+// Counters: list, edit, add (predefined or custom), remove
+// ---------------------------------------------------------------------------
+
+const COMMON_COUNTERS = ['+1/+1', '-1/-1', 'loyalty', 'charge', 'shield', 'stun', 'oil', 'lore', 'time', 'fade', 'age', 'level'];
+
+function CountersModal({ guid, guids, onClose }: { guid: string; guids: string[]; onClose: () => void }) {
+  const pool = useGame((s) => s.pool[guid]);
+  const seed = useGame.getState().cards[guid]?.counters ?? {};
+  // Commander tax rides in counters but isn't a counter on the permanent.
+  const initial = Object.entries(seed).filter(([label]) => label !== 'tax');
+  const [rows, setRows] = useState<{ label: string; value: number }[]>(() =>
+    initial.map(([label, value]) => ({ label, value }))
+  );
+  const [custom, setCustom] = useState('');
+  const name = pool?.sf?.name ?? (pool?.custom?.name as string | undefined) ?? 'card';
+  const group = guids.length > 1;
+
+  const add = (label: string) => {
+    const l = label.trim();
+    if (!l) return;
+    setRows((rs) =>
+      rs.some((r) => r.label === l) ? rs.map((r) => (r.label === l ? { ...r, value: r.value + 1 } : r)) : [...rs, { label: l, value: 1 }]
+    );
+  };
+  const setValue = (label: string, value: number) =>
+    setRows((rs) => rs.map((r) => (r.label === label ? { ...r, value: Math.max(0, Math.floor(value) || 0) } : r)));
+  const remove = (label: string) => setRows((rs) => rs.filter((r) => r.label !== label));
+
+  const save = () => {
+    // Every label the editor started with or ends with; dropped ones go to 0.
+    const labels = new Set([...initial.map(([l]) => l), ...rows.map((r) => r.label)]);
+    const value = (l: string) => rows.find((r) => r.label === l)?.value ?? 0;
+    actions.withUndo(group ? `counters on ${guids.length} cards` : 'counter change', () => {
+      for (const g of guids) {
+        const cur = useGame.getState().cards[g]?.counters ?? {};
+        for (const l of labels) if ((cur[l] ?? 0) !== value(l)) actions.setCounter(g, l, value(l));
+      }
+    });
+    onClose();
+  };
+
+  return (
+    <Backdrop onClose={onClose}>
+      <div className="modal-head">
+        <h3>Counters — {group ? `${guids.length} cards` : name}</h3>
+        <button className="modal-close" onClick={onClose} title="Close" aria-label="Close">✕</button>
+      </div>
+      {group && <div className="subtle">Saving sets these exact counts on every selected card.</div>}
+      <div className="counter-rows">
+        {rows.length === 0 && <div className="subtle">No counters yet — add one below.</div>}
+        {rows.map((r) => (
+          <div key={r.label} className="counter-row">
+            <span className="counter-label">{r.label}</span>
+            <button className="small" onClick={() => setValue(r.label, r.value - 1)} aria-label={`fewer ${r.label}`}>−</button>
+            <input
+              type="number"
+              min={0}
+              value={r.value}
+              onChange={(e) => setValue(r.label, Number(e.target.value))}
+              onKeyDown={(e) => e.key === 'Enter' && save()}
+              onFocus={(e) => e.target.select()}
+            />
+            <button className="small" onClick={() => setValue(r.label, r.value + 1)} aria-label={`more ${r.label}`}>+</button>
+            <button className="modal-close" onClick={() => remove(r.label)} title="Remove" aria-label={`remove ${r.label}`}>✕</button>
+          </div>
+        ))}
+      </div>
+      <div className="counter-chips">
+        {COMMON_COUNTERS.map((l) => (
+          <button key={l} className="small" onClick={() => add(l)}>+ {l}</button>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          placeholder="Custom counter (e.g. bounty)"
+          value={custom}
+          maxLength={30}
+          onChange={(e) => setCustom(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && custom.trim()) {
+              add(custom);
+              setCustom('');
+            }
+          }}
+          style={{ flex: 1 }}
+        />
+        <button
+          disabled={!custom.trim()}
+          onClick={() => {
+            add(custom);
+            setCustom('');
+          }}
+        >
+          Add
+        </button>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+        <button onClick={onClose}>Cancel</button>
+        <button className="primary" onClick={save}>Save</button>
+      </div>
+    </Backdrop>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Tokens (C-7 + custom via crucible)
 // ---------------------------------------------------------------------------
 
@@ -1105,6 +1210,8 @@ export function ModalHost() {
       return <ZoneModal zone={modal.zone} zoneOwnerId={modal.zoneOwnerId} onClose={close} />;
     case 'card':
       return <CardPeekModal guid={modal.guid} onClose={close} />;
+    case 'counters':
+      return <CountersModal guid={modal.guid} guids={modal.guids} onClose={close} />;
     case 'tokens':
       return <TokenModal at={modal.at} onClose={close} />;
     case 'import':

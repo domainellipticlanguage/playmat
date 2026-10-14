@@ -64,20 +64,8 @@ function menuItemsFor(card: CardState, pool: PoolCard | undefined) {
     action: () => actions.setCounter(g, '-1/-1', (card.counters['-1/-1'] ?? 0) + 1),
   });
   items.push({
-    label: 'Set +1/+1 counters…',
-    action: () => {
-      const n = askCount('How many +1/+1 counters?', card.counters['+1/+1'] ?? 0);
-      if (n != null) actions.setCounter(g, '+1/+1', n);
-    },
-  });
-  items.push({
-    label: 'Counter…',
-    action: () => {
-      const label = prompt('Counter name (e.g. loyalty, charge):', 'charge');
-      if (!label) return;
-      const value = Number(prompt(`How many "${label}" counters?`, String((card.counters[label] ?? 0) + 1)));
-      if (Number.isFinite(value)) actions.setCounter(g, label, value);
-    },
+    label: 'Counters…',
+    action: () => useUI.getState().openModal({ kind: 'counters', guid: g, guids: [g] }),
   });
   items.push({ label: 'Copy as token', action: () => actions.copyCardAsToken(g, { x: card.x + 40, y: card.y + 20 }) });
   items.push({ label: 'To hand', action: () => actions.moveCard(g, { zone: 'hand' }) });
@@ -88,14 +76,6 @@ function menuItemsFor(card: CardState, pool: PoolCard | undefined) {
   items.push({ label: 'To command zone', action: () => actions.moveCard(g, { zone: 'command' }) });
   if (pool?.isToken) items.push({ label: 'Remove token', action: () => actions.removeToken(g) });
   return items;
-}
-
-/** Prompt for a whole, non-negative count; null if cancelled or nonsense. */
-function askCount(question: string, current: number): number | null {
-  const raw = prompt(question, String(current));
-  if (raw == null || raw.trim() === '') return null;
-  const n = Math.floor(Number(raw));
-  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 /**
@@ -138,20 +118,8 @@ function groupMenuItemsFor(card: CardState, pool: PoolCard | undefined, n: numbe
         each(`counters on ${n} cards`, (c) => actions.setCounter(c.guid, '-1/-1', (c.counters['-1/-1'] ?? 0) + 1)),
     },
     {
-      label: 'Set +1/+1 counters on each…',
-      action: () => {
-        const count = askCount(`How many +1/+1 counters on each of the ${n} cards?`, card.counters['+1/+1'] ?? 0);
-        if (count != null) each(`counters on ${n} cards`, (c) => actions.setCounter(c.guid, '+1/+1', count));
-      },
-    },
-    {
-      label: 'Counter on each…',
-      action: () => {
-        const label = prompt('Counter name (e.g. loyalty, charge):', 'charge');
-        if (!label) return;
-        const value = Number(prompt(`How many "${label}" counters on each?`, String((card.counters[label] ?? 0) + 1)));
-        if (Number.isFinite(value)) each(`counters on ${n} cards`, (c) => actions.setCounter(c.guid, label, value));
-      },
+      label: 'Counters on each…',
+      action: () => useUI.getState().openModal({ kind: 'counters', guid: card.guid, guids: liveGroup(card.guid) }),
     },
     {
       label: `Copy ${n} as tokens`,
