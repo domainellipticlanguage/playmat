@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { PoolCard } from '@playmat/shared';
+import type { PlaymatFrame, PoolCard } from '@playmat/shared';
 import { newGuid, parseDecklist } from '@playmat/shared';
 import { useGame } from '../store';
 import { useUI, type ModalState } from '../uiStore';
@@ -10,6 +10,8 @@ import { resolveDeckByNames, resolveByIds, searchTokens, toPoolCard, type Scryfa
 import { fetchArchidektDeck, parseArchidektUrl } from '../archidekt';
 import { persisted } from '../session';
 import { CardView } from './CardView';
+import { PlaymatImage } from './Battlefield';
+import { matRect, seatAngle } from '../view';
 
 function Backdrop({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   // Escape closes every modal, same as clicking the backdrop.
@@ -352,6 +354,130 @@ function CardPeekModal({ guid, onClose }: { guid: string; onClose: () => void })
       <CardView pool={pool} rotIndex={card?.rotIndex ?? 0} large style={{ width: 300, alignSelf: 'center' }} />
       <div className="subtle" style={{ textAlign: 'center' }}>Only you see this — the card stays face down for the table.</div>
     </Backdrop>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Custom playmat framing: drag to move, slider/wheel to zoom
+// ---------------------------------------------------------------------------
+
+const NO_FRAME: PlaymatFrame = { x: 0, y: 0, zoom: 1 };
+const MAX_PREVIEW_W = 380;
+const MAX_PREVIEW_H = 240;
+
+function PlaymatFramer({
+  url,
+  frame,
+  onChange,
+  onCommit,
+}: {
+  url: string;
+  frame: PlaymatFrame;
+  onChange: (f: PlaymatFrame) => void;
+  /** Gesture finished: publish to the table. */
+  onCommit: () => void;
+}) {
+  const seat = useGame((s) => s.session?.seat ?? 0);
+  const players = useGame((s) => s.players);
+  // The art lies in the player's own orientation, so side seats swap dims.
+  const r = matRect(seat, (q) => players.some((p) => p.seat === q));
+  const sideways = seatAngle(seat) % 180 !== 0;
+  const matW = sideways ? r.y1 - r.y0 : r.x1 - r.x0;
+  const matH = sideways ? r.x1 - r.x0 : r.y1 - r.y0;
+  const k = Math.min(MAX_PREVIEW_W / matW, MAX_PREVIEW_H / matH);
+  const w = Math.round(matW * k);
+  const h = Math.round(matH * k);
+
+  const boxRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ x: number; y: number; f: PlaymatFrame } | null>(null);
+  const frameRef = useRef(frame);
+  frameRef.current = frame;
+  const clampFrame = (f: PlaymatFrame): PlaymatFrame => ({
+    x: Math.max(-100, Math.min(100, f.x)),
+    y: Math.max(-100, Math.min(100, f.y)),
+    zoom: Math.max(0.1, Math.min(5, f.zoom)),
+  });
+
+  // Wheel zooms the preview, not the modal: needs a non-passive listener.
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const f = frameRef.current;
+      onChange(clampFrame({ ...f, zoom: f.zoom * Math.exp(-e.deltaY * 0.002) }));
+      if (commitTimer.current) clearTimeout(commitTimer.current);
+      commitTimer.current = setTimeout(onCommit, 300);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  });
+
+  /** Zoom so the whole image shows (black fills the rest), centered. */
+  const fit = () => {
+    const img = new Image();
+    img.onload = () => {
+      const cover = Math.max(matW / img.naturalWidth, matH / img.naturalHeight);
+      const contain = Math.min(matW / img.naturalWidth, matH / img.naturalHeight);
+      onChange({ x: 0, y: 0, zoom: contain / cover });
+      onCommit();
+    };
+    img.src = url;
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+      <div
+        ref={boxRef}
+        className="playmat-framer"
+        style={{ width: w, height: h }}
+        title="Drag to move · scroll to zoom"
+        onPointerDown={(e) => {
+          drag.current = { x: e.clientX, y: e.clientY, f: frame };
+          e.currentTarget.setPointerCapture(e.pointerId);
+          e.preventDefault();
+        }}
+        onPointerMove={(e) => {
+          const d = drag.current;
+          if (!d) return;
+          // translate(%) is of the image layer, which is exactly the mat's size.
+          onChange(clampFrame({ ...d.f, x: d.f.x + ((e.clientX - d.x) / w) * 100, y: d.f.y + ((e.clientY - d.y) / h) * 100 }));
+        }}
+        onPointerUp={() => {
+          if (drag.current) onCommit();
+          drag.current = null;
+        }}
+        onPointerCancel={() => (drag.current = null)}
+      >
+        <PlaymatImage art={url} frame={frame} />
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span className="subtle">Zoom</span>
+        <input
+          type="range"
+          min={0.1}
+          max={5}
+          step={0.01}
+          value={frame.zoom}
+          onChange={(e) => onChange(clampFrame({ ...frame, zoom: Number(e.target.value) }))}
+          onPointerUp={onCommit}
+          onKeyUp={onCommit}
+          style={{ width: 140 }}
+        />
+        <button className="small" onClick={fit}>Fit whole image</button>
+        <button
+          className="small"
+          onClick={() => {
+            onChange(NO_FRAME);
+            onCommit();
+          }}
+        >
+          Fill mat
+        </button>
+      </div>
+      <span className="subtle">Drag to move · scroll or slide to zoom · anything the image doesn't cover is black.</span>
+    </div>
   );
 }
 
@@ -1107,10 +1233,19 @@ function PrefsModal({ onClose }: { onClose: () => void }) {
           value={prefs.playmatUrl ?? (prefs.playmatStyle?.startsWith('url:') ? prefs.playmatStyle.slice(4) : '')}
           onChange={(e) => {
             const u = e.target.value;
-            setPrefs({ playmatUrl: u, playmatStyle: `url:${u}` });
+            // A new image starts unframed: the old offsets meant nothing to it.
+            setPrefs({ playmatUrl: u, playmatStyle: `url:${u}`, playmatFrame: undefined });
           }}
           onBlur={publishIdentity}
           onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
+        />
+      )}
+      {matChoice === 'url' && prefs.playmatStyle && prefs.playmatStyle.length > 4 && (
+        <PlaymatFramer
+          url={prefs.playmatStyle.slice(4)}
+          frame={prefs.playmatFrame ?? NO_FRAME}
+          onChange={(f) => setPrefs({ playmatFrame: f })}
+          onCommit={publishIdentity}
         />
       )}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>

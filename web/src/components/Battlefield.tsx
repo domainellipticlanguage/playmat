@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { CardState, PlayerState, PoolCard, ZoneName } from '@playmat/shared';
+import type { CardState, PlayerState, PlaymatFrame, PoolCard, ZoneName } from '@playmat/shared';
 import { useGame } from '../store';
 import { useUI } from '../uiStore';
 import { sendEphemeral } from '../connection';
@@ -21,6 +21,26 @@ import {
   type MatRect,
   type ViewTransform,
 } from '../view';
+
+/**
+ * The mat's picture: the image (framed — moved/zoomed — when it's a custom
+ * one, with black wherever it doesn't reach), under the 60% black wash that
+ * lets cards stand off it. Shared with the framing editor in Preferences.
+ */
+export function PlaymatImage({ art, frame }: { art: string; frame?: PlaymatFrame }) {
+  return (
+    <>
+      <div
+        className="playmat-img"
+        style={{
+          backgroundImage: `url(${art})`,
+          transform: frame ? `translate(${frame.x}%, ${frame.y}%) scale(${frame.zoom})` : undefined,
+        }}
+      />
+      <div className="playmat-wash" />
+    </>
+  );
+}
 
 /**
  * One player's mat: a rounded rect in world coordinates, their color on the
@@ -65,11 +85,9 @@ function Playmat({
           width: sideways ? h : w,
           height: sideways ? w : h,
           transform: `translate(-50%, -50%) rotate(${angle}deg)`,
-          // A 60% black layer over every mat (pattern, commander art, custom
-          // image): cards — especially sleeves that match the mat — stand off it.
-          backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url(${art})`,
         }}
       >
+        <PlaymatImage art={art} frame={ps?.playmat?.startsWith('url:') ? ps.playmatFrame : undefined} />
         <span className="playmat-name" style={{ color: `${color.hex}cc` }}>
           {name}
         </span>

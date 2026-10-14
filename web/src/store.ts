@@ -9,6 +9,7 @@ import {
   type EphemeralEvent,
   type LogEntry,
   type PlayerState,
+  type PlaymatFrame,
   type PoolCard,
   type RoomState,
   type SeatRecord,
@@ -43,6 +44,8 @@ export interface Prefs {
   playmatStyle?: string;
   /** Last custom playmat URL — kept even while another style is active. */
   playmatUrl?: string;
+  /** Framing for the custom playmat URL (reset when the URL changes). */
+  playmatFrame?: PlaymatFrame;
   /** My card backs: 'mtg' | 'playmat' | 'url:…'. Unset = 'mtg'. */
   sleeveStyle?: string;
   /** Last custom sleeve URL — kept even while another style is active. */

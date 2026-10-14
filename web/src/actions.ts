@@ -96,6 +96,8 @@ function myPlayerState(patch: Partial<PlayerState> = {}): PlayerState {
   // resolves (seat default) so peers never have to guess.
   merged.color = s.prefs.playerColor ?? merged.color ?? seatDefaultColor(merged.seat).name;
   merged.playmat = s.prefs.playmatStyle ?? merged.playmat;
+  // Framing only means something for a custom image.
+  merged.playmatFrame = merged.playmat?.startsWith('url:') ? s.prefs.playmatFrame : undefined;
   merged.sleeve = s.prefs.sleeveStyle ?? merged.sleeve;
   if (merged.topRevealed !== null) merged.topRevealed = s.hidden.library[0] ?? null;
   return merged;

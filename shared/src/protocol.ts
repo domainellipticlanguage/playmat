@@ -124,12 +124,25 @@ export interface PlayerState {
    * 'commander' (this player's commander art crop), or 'url:<https image url>'.
    */
   playmat?: string;
+  /** How a custom ('url:') playmat image is framed on the mat. */
+  playmatFrame?: PlaymatFrame;
   /**
    * Card-back ("sleeve") choice for cards this player owns: 'mtg' (the
    * standard Magic back), 'playmat' (whatever their playmat shows), or
    * 'url:<https image url>'. Optional; unset = 'mtg'.
    */
   sleeve?: string;
+}
+
+/**
+ * Framing for a custom playmat image, in the mat's own (player-facing)
+ * orientation. x/y shift the image by a percentage of the mat's width/height;
+ * zoom 1 fills the mat (CSS cover), below 1 shrinks it and the rest is black.
+ */
+export interface PlaymatFrame {
+  x: number;
+  y: number;
+  zoom: number;
 }
 
 export interface RoomState {
