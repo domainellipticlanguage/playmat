@@ -438,6 +438,8 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
 .hud.pos-left .piles, .hud.pos-right .piles { flex-direction: column; align-self: center; }
 .hud.pos-left .revealed-strip, .hud.pos-right .revealed-strip { flex-wrap: wrap; max-width: 130px; }
 .hud.turn { border-color: var(--accent); box-shadow: 0 0 18px var(--accent-soft), var(--shadow); }
+/* Take-turn button while a passed turn waits for me — same gold as .hud.turn. */
+button.turn-pending { background: #3a2f10; border-color: var(--accent); color: var(--accent); box-shadow: 0 0 12px var(--accent-soft); }
 
 .hud .who { display: flex; flex-direction: column; gap: 4px; }
 /* Collapse chevron + folded tray (client-only, so it can't confuse peers). */

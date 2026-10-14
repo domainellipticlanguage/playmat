@@ -272,7 +272,13 @@ export function Table() {
                 Pass turn ▸
               </button>
             ) : (
-              <button className="small" onClick={() => actions.takeTurn()} title="Untap, upkeep, draw — claims the turn">
+              <button
+                // Gold like the turn-holder's tray: the turn was passed to me
+                // and is waiting to be taken.
+                className={`small${room?.turnPlayerId === me ? ' turn-pending' : ''}`}
+                onClick={() => actions.takeTurn()}
+                title="Untap, upkeep, draw — claims the turn"
+              >
                 Take turn ▸
               </button>
             )}
