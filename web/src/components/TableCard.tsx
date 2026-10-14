@@ -34,7 +34,7 @@ export interface TableCardProps {
 }
 
 function menuItemsFor(card: CardState, pool: PoolCard | undefined) {
-  const items: { label: string; action: () => void }[] = [];
+  const items: { label: string; action: () => void; keepOpen?: boolean }[] = [];
   const g = card.guid;
   items.push({ label: card.tapped ? 'Untap' : 'Tap', action: () => actions.tapCards([g], !card.tapped) });
   if (card.faceDown) {
@@ -67,6 +67,14 @@ function menuItemsFor(card: CardState, pool: PoolCard | undefined) {
     label: 'Counters…',
     action: () => useUI.getState().openModal({ kind: 'counters', guid: g, guids: [g] }),
   });
+  // Quick steppers for every counter already on the card (not commander tax).
+  // `card` is this render's — the open menu re-renders with each change, so
+  // repeat clicks count from the live value.
+  for (const [label, n] of Object.entries(card.counters)) {
+    if (label === 'tax') continue;
+    items.push({ label: `▲ ${label} (${n})`, keepOpen: true, action: () => actions.setCounter(g, label, n + 1) });
+    items.push({ label: `▼ ${label} (${n})`, keepOpen: true, action: () => actions.setCounter(g, label, n - 1) });
+  }
   items.push({ label: 'Copy as token', action: () => actions.copyCardAsToken(g, { x: card.x + 40, y: card.y + 20 }) });
   items.push({ label: 'To hand', action: () => actions.moveCard(g, { zone: 'hand' }) });
   items.push({ label: 'To graveyard', action: () => actions.moveCard(g, { zone: 'graveyard' }) });

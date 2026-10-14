@@ -24,12 +24,14 @@ const NO_CARD: PoolCard = { guid: '', ownerId: '' };
  * action so picking an item dismisses the menu like you'd expect. (Worth
  * fixing upstream too.)
  */
-export function withMenuClose(items: MtgCardMenuItem[]): MtgCardMenuItem[] {
+export function withMenuClose(items: (MtgCardMenuItem & { keepOpen?: boolean })[]): MtgCardMenuItem[] {
   return items.map((m) => ({
-    ...m,
+    label: m.label,
     action: () => {
       m.action();
-      document.dispatchEvent(new PointerEvent('pointerdown'));
+      // Steppers (counter ▲/▼) leave it open for repeat clicks; crucible
+      // re-renders the open menu, so their labels track the new count.
+      if (!m.keepOpen) document.dispatchEvent(new PointerEvent('pointerdown'));
     },
   }));
 }
