@@ -26,6 +26,10 @@ export function Hand() {
   const stripRef = useRef<HTMLDivElement>(null);
   const cardWRef = useRef(108);
   const [overlap, setOverlap] = useState(REST_OVERLAP);
+  /** Hovered card. The pop-up and the neighbors' spread are transforms on a
+   * pointer-events:none inner layer, so hit boxes never move under the cursor
+   * — moving them (margins) made hover flip between cards in a loop. */
+  const [hovered, setHovered] = useState<string | null>(null);
 
   // The card being dragged out collapses (width 0) so the fan closes around
   // it — one physical card, carried by the ghost, not a ghostly double. It
@@ -110,7 +114,10 @@ export function Hand() {
     const d = dragRef.current;
     if (!d) return;
     if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) > 6) {
-      if (!d.moved) useUI.getState().setDragging(d.guid);
+      if (!d.moved) {
+        useUI.getState().setDragging(d.guid);
+        setHovered(null);
+      }
       d.moved = true;
     }
     if (d.moved) setGhost({ guid: d.guid, x: e.clientX, y: e.clientY });
@@ -189,6 +196,11 @@ export function Hand() {
   };
 
   let vi = 0; // index among visible (non-lifted) cards, what `insert` counts
+  // No pop-up while a drag is live: it would fight the insertion gap.
+  const hoverIdx = droppable || !hovered ? -1 : hand.indexOf(hovered);
+  // How far the hovered card's neighbors slide apart: what the old 24px hover
+  // margin opened up on each side.
+  const spread = 24 - overlap;
   return (
     <>
       <div
@@ -197,26 +209,35 @@ export function Hand() {
         data-drop={`hand:${me ?? ''}`}
         style={{ '--hand-overlap': `${overlap}px` } as React.CSSProperties}
       >
-        {hand.map((guid) => {
+        {hand.map((guid, i) => {
           const p = pool[guid];
           const revealed = cards[guid]?.revealed && cards[guid]?.zone === 'hand';
           const isLifted = guid === lifted;
           const myVi = isLifted ? -1 : vi++;
+          const shift = hoverIdx < 0 || i === hoverIdx ? 0 : i < hoverIdx ? -spread : spread;
           return (
             <div
               key={guid}
               data-guid={guid}
-              className={`hand-card${revealed ? ' revealed' : ''}${isLifted ? ' lifted' : ''}`}
+              className={`hand-card${revealed ? ' revealed' : ''}${isLifted ? ' lifted' : ''}${i === hoverIdx ? ' hovered' : ''}`}
               style={isLifted ? undefined : gapFor(myVi)}
               onPointerDown={onPointerDown(guid)}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerCancel}
               onContextMenu={menuFor(guid)}
-              onMouseEnter={() => !useUI.getState().dragging && p && useUI.getState().setHover({ pool: p, rotIndex: 0 })}
-              onMouseLeave={() => useUI.getState().setHover(null)}
+              onMouseEnter={() => {
+                setHovered(guid);
+                if (!useUI.getState().dragging && p) useUI.getState().setHover({ pool: p, rotIndex: 0 });
+              }}
+              onMouseLeave={() => {
+                setHovered((h) => (h === guid ? null : h));
+                useUI.getState().setHover(null);
+              }}
             >
-              <CardView pool={p} />
+              <div className="hand-card-face" style={shift ? { transform: `translateX(${shift}px)` } : undefined}>
+                <CardView pool={p} />
+              </div>
             </div>
           );
         })}

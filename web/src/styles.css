@@ -629,20 +629,27 @@ button.turn-pending { background: #3a2f10; border-color: var(--accent); color: v
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
-.hand-card:hover { transform: translateY(-22px) scale(1.35); z-index: 5; margin: 0 24px; }
+/* Hover visuals live on the inner face only (pointer-events:none), so the
+   card's hit box — and its neighbors' — stay put; see Hand.tsx. */
+.hand-card-face { position: relative; pointer-events: none; transition: transform 120ms ease; }
+.hand-card.hovered { z-index: 5; }
+.hand-card.hovered .hand-card-face { transform: translateY(-56px) scale(1.35); }
+/* Keep the popped-up card hovered when the cursor moves up onto it. */
+.hand-card.hovered::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  bottom: 100%;
+  height: 84px;
+}
 /* Mid-drag the card leaves the fan bodily: it collapses so neighbors close
    the gap, and only the pointer ghost remains — one physical card. It stays
    mounted (display:none would drop its pointer capture and kill the drag). */
 .hand-card.lifted { width: 0; margin: 0; }
 .hand-card.lifted .mtg-card { visibility: hidden; }
 /* A drag that could drop here is live: give an empty strip a landing zone,
-   and stop the hover pop-up from fighting the insertion gap. */
+   (Hand.tsx suppresses the hover pop-up so it can't fight the insertion gap.) */
 .hand-strip.drop-ready { min-height: 90px; }
-.hand-strip.drop-ready .hand-card:hover {
-  transform: translateY(34px);
-  margin: 0 var(--hand-overlap, -14px);
-  z-index: auto;
-}
 /* Pointer is over the strip: confirm the hand will take the drop. */
 .hand-strip.drop-hover {
   background: linear-gradient(to top, var(--accent-soft), transparent 80%);
@@ -652,7 +659,7 @@ button.turn-pending { background: #3a2f10; border-color: var(--accent); color: v
 .hand-card .mtg-card { display: block; width: 100%; }
 .hand-card .mtg-card-face { border-radius: 6px !important; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7) !important; }
 /* Top-LEFT corner: the top-right would sit on the card's mana cost. */
-.hand-card.revealed::after {
+.hand-card.revealed .hand-card-face::after {
   content: '👁';
   position: absolute;
   top: 2px; left: 4px;
