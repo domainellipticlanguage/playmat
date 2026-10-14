@@ -137,7 +137,8 @@ export interface PlayerState {
 /**
  * Framing for a custom playmat image, in the mat's own (player-facing)
  * orientation. x/y shift the image by a percentage of the mat's width/height;
- * zoom 1 fills the mat (CSS cover), below 1 shrinks it and the rest is black.
+ * zoom 1 shows the WHOLE image (CSS contain, black around it), above 1 zooms
+ * in. An unframed custom mat (no playmatFrame) fills the mat (CSS cover).
  */
 export interface PlaymatFrame {
   x: number;

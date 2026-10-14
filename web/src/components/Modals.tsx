@@ -361,9 +361,10 @@ function CardPeekModal({ guid, onClose }: { guid: string; onClose: () => void })
 // Custom playmat framing: drag to move, slider/wheel to zoom
 // ---------------------------------------------------------------------------
 
-const NO_FRAME: PlaymatFrame = { x: 0, y: 0, zoom: 1 };
 const MAX_PREVIEW_W = 380;
 const MAX_PREVIEW_H = 240;
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 8;
 
 function PlaymatFramer({
   url,
@@ -372,7 +373,8 @@ function PlaymatFramer({
   onCommit,
 }: {
   url: string;
-  frame: PlaymatFrame;
+  /** Unset = unframed (fills the mat, like before framing existed). */
+  frame: PlaymatFrame | undefined;
   onChange: (f: PlaymatFrame) => void;
   /** Gesture finished: publish to the table. */
   onCommit: () => void;
@@ -388,14 +390,30 @@ function PlaymatFramer({
   const w = Math.round(matW * k);
   const h = Math.round(matH * k);
 
+  // Zoom (contain-relative) at which the image exactly fills the mat — what
+  // an unframed mat shows. Needs the image's own size.
+  const [fillZoom, setFillZoom] = useState<number | null>(null);
+  useEffect(() => {
+    setFillZoom(null);
+    const img = new Image();
+    img.onload = () => {
+      const cover = Math.max(matW / img.naturalWidth, matH / img.naturalHeight);
+      const contain = Math.min(matW / img.naturalWidth, matH / img.naturalHeight);
+      setFillZoom(cover / contain);
+    };
+    img.src = url;
+  }, [url, matW, matH]);
+  // Editing an unframed mat starts from exactly what it shows now.
+  const current: PlaymatFrame | undefined = frame ?? (fillZoom ? { x: 0, y: 0, zoom: fillZoom } : undefined);
+
   const boxRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; f: PlaymatFrame } | null>(null);
-  const frameRef = useRef(frame);
-  frameRef.current = frame;
+  const currentRef = useRef(current);
+  currentRef.current = current;
   const clampFrame = (f: PlaymatFrame): PlaymatFrame => ({
     x: Math.max(-100, Math.min(100, f.x)),
     y: Math.max(-100, Math.min(100, f.y)),
-    zoom: Math.max(0.1, Math.min(5, f.zoom)),
+    zoom: Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, f.zoom)),
   });
 
   // Wheel zooms the preview, not the modal: needs a non-passive listener.
@@ -405,7 +423,8 @@ function PlaymatFramer({
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const f = frameRef.current;
+      const f = currentRef.current;
+      if (!f) return;
       onChange(clampFrame({ ...f, zoom: f.zoom * Math.exp(-e.deltaY * 0.002) }));
       if (commitTimer.current) clearTimeout(commitTimer.current);
       commitTimer.current = setTimeout(onCommit, 300);
@@ -414,16 +433,9 @@ function PlaymatFramer({
     return () => el.removeEventListener('wheel', onWheel);
   });
 
-  /** Zoom so the whole image shows (black fills the rest), centered. */
-  const fit = () => {
-    const img = new Image();
-    img.onload = () => {
-      const cover = Math.max(matW / img.naturalWidth, matH / img.naturalHeight);
-      const contain = Math.min(matW / img.naturalWidth, matH / img.naturalHeight);
-      onChange({ x: 0, y: 0, zoom: contain / cover });
-      onCommit();
-    };
-    img.src = url;
+  const set = (f: PlaymatFrame) => {
+    onChange(f);
+    onCommit();
   };
 
   return (
@@ -434,7 +446,8 @@ function PlaymatFramer({
         style={{ width: w, height: h }}
         title="Drag to move · scroll to zoom"
         onPointerDown={(e) => {
-          drag.current = { x: e.clientX, y: e.clientY, f: frame };
+          if (!current) return;
+          drag.current = { x: e.clientX, y: e.clientY, f: current };
           e.currentTarget.setPointerCapture(e.pointerId);
           e.preventDefault();
         }}
@@ -450,29 +463,24 @@ function PlaymatFramer({
         }}
         onPointerCancel={() => (drag.current = null)}
       >
-        <PlaymatImage art={url} frame={frame} />
+        <PlaymatImage art={url} frame={current} />
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <span className="subtle">Zoom</span>
         <input
           type="range"
-          min={0.1}
-          max={5}
+          min={MIN_ZOOM}
+          max={MAX_ZOOM}
           step={0.01}
-          value={frame.zoom}
-          onChange={(e) => onChange(clampFrame({ ...frame, zoom: Number(e.target.value) }))}
+          disabled={!current}
+          value={current?.zoom ?? 1}
+          onChange={(e) => current && onChange(clampFrame({ ...current, zoom: Number(e.target.value) }))}
           onPointerUp={onCommit}
           onKeyUp={onCommit}
           style={{ width: 140 }}
         />
-        <button className="small" onClick={fit}>Fit whole image</button>
-        <button
-          className="small"
-          onClick={() => {
-            onChange(NO_FRAME);
-            onCommit();
-          }}
-        >
+        <button className="small" onClick={() => set({ x: 0, y: 0, zoom: 1 })}>Fit whole image</button>
+        <button className="small" disabled={!fillZoom} onClick={() => fillZoom && set({ x: 0, y: 0, zoom: fillZoom })}>
           Fill mat
         </button>
       </div>
@@ -1243,7 +1251,7 @@ function PrefsModal({ onClose }: { onClose: () => void }) {
       {matChoice === 'url' && prefs.playmatStyle && prefs.playmatStyle.length > 4 && (
         <PlaymatFramer
           url={prefs.playmatStyle.slice(4)}
-          frame={prefs.playmatFrame ?? NO_FRAME}
+          frame={prefs.playmatFrame}
           onChange={(f) => setPrefs({ playmatFrame: f })}
           onCommit={publishIdentity}
         />

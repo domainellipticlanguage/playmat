@@ -34,7 +34,12 @@ export function PlaymatImage({ art, frame }: { art: string; frame?: PlaymatFrame
         className="playmat-img"
         style={{
           backgroundImage: `url(${art})`,
-          transform: frame ? `translate(${frame.x}%, ${frame.y}%) scale(${frame.zoom})` : undefined,
+          // Framed: start from the whole image (contain), then move/zoom it —
+          // zooming a cover-cropped layer could never reveal what cover cut.
+          ...(frame && {
+            backgroundSize: 'contain',
+            transform: `translate(${frame.x}%, ${frame.y}%) scale(${frame.zoom})`,
+          }),
         }}
       />
       <div className="playmat-wash" />
