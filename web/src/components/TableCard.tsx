@@ -47,6 +47,14 @@ function menuItemsFor(card: CardState, pool: PoolCard | undefined) {
       action: () => actions.setManifest(g, !card.manifest),
     });
   }
+  const face = pool ? faceAt(pool, card.rotIndex) : null;
+  const printedPT = face?.power != null || typeof pool?.custom?.power === 'string';
+  if (!card.faceDown && (printedPT || card.nonCreature)) {
+    items.push({
+      label: card.nonCreature ? 'Is a creature (show P/T)' : 'Not a creature (hide P/T)',
+      action: () => actions.setNonCreature(g, !card.nonCreature),
+    });
+  }
   if (pool && hasRotationStates(pool)) {
     const n = cardRotations(pool).length;
     items.push({ label: 'Turn / transform', action: () => actions.setRotIndex(g, (card.rotIndex + 1) % n) });
@@ -181,7 +189,9 @@ export const TableCard = memo(function TableCard({
   const angle = baseAngle + (card.tapped ? 90 : 0) + (pool ? zRotation(pool, card.rotIndex) : 0);
   const face = pool ? faceAt(pool, card.rotIndex) : null;
   const customDisplay = useCustomDisplay(pool);
-  const pt = card.faceDown
+  const pt = card.nonCreature && !card.faceDown
+    ? null
+    : card.faceDown
     ? card.manifest
       ? effectivePT({ name: '', img: '', power: '2', toughness: '2' }, card.counters)
       : null
@@ -246,6 +256,11 @@ export const TableCard = memo(function TableCard({
         </div>
       )}
       {pt && <span className="pt-badge">{pt.p}/{pt.t}</span>}
+      {card.nonCreature && !card.faceDown && (
+        <span className="pt-badge noncreature" title="Not a creature right now — no power/toughness">
+          non-creature
+        </span>
+      )}
     </div>
   );
 });

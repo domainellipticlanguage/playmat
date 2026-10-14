@@ -51,6 +51,12 @@ export interface CardState {
    * 2/2 P/T on the back. Cleared when turned face up or off the battlefield.
    */
   manifest?: boolean;
+  /**
+   * Printed P/T but not a creature right now (a Glimmer back as an
+   * enchantment, an uncrewed Vehicle if you're strict): no P/T shows — a
+   * noncreature permanent has none (CR 208.3). Cleared off the battlefield.
+   */
+  nonCreature?: boolean;
   /** Which face is showing for multi-face cards (0 = front). */
   faceIndex: number;
   /** Index into the card's crucible rotations array. */

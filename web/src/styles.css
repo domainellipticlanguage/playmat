@@ -343,6 +343,15 @@ input:focus, textarea:focus { outline: 1px solid var(--accent); }
   padding: 0 10px;
   pointer-events: none;
 }
+/* Stands in for P/T on a printed creature that isn't one right now. */
+.pt-badge.noncreature {
+  font-size: 18px;
+  font-weight: normal;
+  font-style: italic;
+  color: var(--ink-dim);
+  border-color: var(--panel-border);
+  padding: 2px 10px;
+}
 .owner-ring { position: absolute; inset: -3px; border-radius: 8px; pointer-events: none; border: 2px solid transparent; }
 
 /* Playmats: per-player control regions on the table (world coordinates).

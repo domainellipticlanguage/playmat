@@ -192,6 +192,22 @@ describe('planeswalkers', () => {
   });
 });
 
+describe('non-creature toggle', () => {
+  it('sticks on the battlefield and clears when the card leaves', () => {
+    actions.importDeck(mkPool(10));
+    const g = useGame.getState().hidden.hand[0];
+    actions.playFromHand(g, 500, 1900);
+    actions.setNonCreature(g, true);
+    expect(useGame.getState().cards[g].nonCreature).toBe(true);
+    actions.moveCard(g, { zone: 'battlefield', x: 700, y: 1900 }); // still on the table
+    expect(useGame.getState().cards[g].nonCreature).toBe(true);
+    actions.moveCard(g, { zone: 'graveyard' });
+    expect(useGame.getState().cards[g].nonCreature).toBeUndefined();
+    actions.undoLast();
+    expect(useGame.getState().cards[g].nonCreature).toBe(true);
+  });
+});
+
 describe('hidden-zone bookkeeping', () => {
   beforeEach(() => actions.importDeck(mkPool(20)));
 

@@ -639,6 +639,8 @@ export const moveCard = undoable('move card', (guid: string, target: MoveTarget)
     // belongs to the commander across every trip back to the command zone.
     counters: leavingBattlefield ? (cur.counters.tax ? { tax: cur.counters.tax } : {}) : cur.counters,
     manifest: leavingBattlefield || target.faceDown === false ? undefined : cur.manifest,
+    // A new object when it comes back: creature-ness starts over.
+    nonCreature: leavingBattlefield ? undefined : cur.nonCreature,
     revealed: false,
     order: ['graveyard', 'exile', 'command'].includes(target.zone) ? topOrder(target.zone, zoneOwnerId) : 0,
     libPos: target.zone === 'library' ? target.libPos ?? 'top' : undefined,
@@ -807,6 +809,11 @@ export const setRotIndex = undoable('turn/transform', (guid: string, rotIndex: n
 
 export const setFaceDown = undoable('flip', (guid: string, faceDown: boolean): void => {
   sendState([cardEvent({ ...currentCard(guid), faceDown, manifest: faceDown ? currentCard(guid).manifest : undefined })]);
+});
+
+/** Printed P/T but not a creature right now: hide its P/T (see CardState). */
+export const setNonCreature = undoable('creature status', (guid: string, nonCreature: boolean): void => {
+  sendState([cardEvent({ ...currentCard(guid), nonCreature: nonCreature || undefined })]);
 });
 
 /** Mark a face-down card as a 2/2 creature (manifest, morph, disguise…). */
