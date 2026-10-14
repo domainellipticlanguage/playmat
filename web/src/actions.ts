@@ -644,6 +644,13 @@ export const moveCard = undoable('move card', (guid: string, target: MoveTarget)
     libPos: target.zone === 'library' ? target.libPos ?? 'top' : undefined,
   };
 
+  // A planeswalker entering face up arrives with its printed loyalty (unless
+  // something already put loyalty on it).
+  if (cur.zone !== 'battlefield' && next.zone === 'battlefield' && !next.faceDown && next.counters.loyalty == null) {
+    const loyalty = startingLoyalty(s.pool[guid]);
+    if (loyalty > 0) next.counters = { ...next.counters, loyalty };
+  }
+
   const events: StateEvent[] = [];
   const targetIsMyHidden = HIDDEN_ZONES.includes(target.zone) && zoneOwnerId === me;
 
@@ -663,6 +670,13 @@ export const moveCard = undoable('move card', (guid: string, target: MoveTarget)
   }
   sendState(events);
 });
+
+/** Printed loyalty of the face a card enters on (its front); 0 if none/X. */
+function startingLoyalty(pool: PoolCard | undefined): number {
+  const raw = pool?.sf?.faces[0]?.loyalty ?? (pool?.custom?.loyalty as string | number | undefined);
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
 
 export const playFromHand = undoable(
   'play card',

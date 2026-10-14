@@ -172,6 +172,26 @@ describe('deck import + setup', () => {
   });
 });
 
+describe('planeswalkers', () => {
+  it('enter face up with their printed loyalty; face down or re-moved, no change', () => {
+    const pw: PoolCard = {
+      guid: 'pw1', ownerId: ME,
+      sf: { id: 'p', name: 'Liliana', layout: 'normal', faces: [{ name: 'Liliana', img: '', type: 'Legendary Planeswalker — Liliana', loyalty: '3' }] },
+    };
+    const pw2: PoolCard = { ...pw, guid: 'pw2' };
+    actions.importDeck([pw, pw2, ...mkPool(10)]);
+    actions.moveCard('pw1', { zone: 'battlefield', x: 500, y: 1900 });
+    expect(useGame.getState().cards['pw1'].counters).toEqual({ loyalty: 3 });
+    actions.setCounter('pw1', 'loyalty', 5);
+    actions.moveCard('pw1', { zone: 'battlefield', x: 700, y: 1900 }); // moving on the table keeps it
+    expect(useGame.getState().cards['pw1'].counters).toEqual({ loyalty: 5 });
+    actions.moveCard('pw2', { zone: 'battlefield', x: 900, y: 1900, faceDown: true });
+    expect(useGame.getState().cards['pw2'].counters).toEqual({});
+    actions.moveCard('c0', { zone: 'battlefield', x: 1100, y: 1900 }); // not a planeswalker
+    expect(useGame.getState().cards['c0'].counters).toEqual({});
+  });
+});
+
 describe('hidden-zone bookkeeping', () => {
   beforeEach(() => actions.importDeck(mkPool(20)));
 
