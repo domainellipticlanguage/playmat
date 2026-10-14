@@ -589,6 +589,7 @@ button.turn-pending { background: #3a2f10; border-color: var(--accent); color: v
 }
 
 .revealed-strip { display: flex; gap: 3px; }
+.revealed-strip .rev-collapse, .revealed-collapsed { align-self: flex-start; padding: 0 5px; font-size: 11px; }
 .revealed-strip .rev-card { width: 40px; }
 .revealed-strip .rev-card .mtg-card { display: block; width: 100%; }
 .revealed-strip .rev-card .mtg-card-face { border-radius: 3px !important; }

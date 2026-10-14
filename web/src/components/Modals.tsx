@@ -4,7 +4,7 @@ import { newGuid, parseDecklist } from '@playmat/shared';
 import { useGame } from '../store';
 import { useUI, type ModalState } from '../uiStore';
 import * as actions from '../actions';
-import { deckColorIdentity, manaSymbolUrl } from '../cards';
+import { cardSearchText, deckColorIdentity, manaSymbolUrl } from '../cards';
 import { PLAYER_PALETTE, paletteColor } from '../colors';
 import { resolveDeckByNames, resolveByIds, searchTokens, toPoolCard, type ScryfallCard } from '../scryfall';
 import { fetchArchidektDeck, parseArchidektUrl } from '../archidekt';
@@ -182,6 +182,76 @@ function SearchModal({ ownerId, onClose }: { ownerId?: string; onClose: () => vo
               : 'Take a card and the library shuffles on close.'}
         </span>
         <button className="primary" onClick={close}>Close{touched && isMine ? ' & shuffle' : ''}</button>
+      </div>
+    </Backdrop>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Search a hand — mine, or one opened to the table (teaching mode / reveal)
+// ---------------------------------------------------------------------------
+
+function HandModal({ ownerId, onClose }: { ownerId: string; onClose: () => void }) {
+  const pool = useGame((s) => s.pool);
+  const cards = useGame((s) => s.cards);
+  const me = useGame((s) => s.session?.playerId);
+  const myHand = useGame((s) => s.hidden.hand);
+  const players = useGame((s) => s.players);
+  const isMine = ownerId === me;
+  const ownerName = isMine ? 'your' : `${players.find((p) => p.playerId === ownerId)?.name ?? '?'}'s`;
+  // A peer's hand is only visible card by card as it's revealed.
+  const hand = useMemo(
+    () =>
+      isMine
+        ? myHand
+        : Object.values(cards)
+            .filter((c) => c.zone === 'hand' && c.revealed && (c.zoneOwnerId ?? c.ownerId) === ownerId)
+            .map((c) => c.guid),
+    [isMine, myHand, cards, ownerId]
+  );
+  const [q, setQ] = useState('');
+  const shown = useMemo(() => {
+    const ql = q.trim().toLowerCase();
+    if (!ql) return hand;
+    return hand.filter((g) => {
+      const p = pool[g];
+      if (!p) return false;
+      const name = p.sf?.name ?? (p.custom?.name as string | undefined) ?? '';
+      return name.toLowerCase().includes(ql) || (cardSearchText(p, 0) ?? '').toLowerCase().includes(ql);
+    });
+  }, [q, hand, pool]);
+
+  const play = (guid: string) => {
+    const at = actions.autoPlayPosition(guid);
+    if (isMine) actions.playFromHand(guid, at.x, at.y, false);
+    // Slots into the OWNER's rows — lands by their edge, spells centered.
+    else actions.moveCard(guid, { zone: 'battlefield', ...at });
+  };
+
+  return (
+    <Backdrop onClose={onClose}>
+      <div className="modal-head">
+        <h3>Search {ownerName} hand ({hand.length})</h3>
+        <button className="modal-close" onClick={onClose} title="Close" aria-label="Close">✕</button>
+      </div>
+      <input autoFocus placeholder="Filter by name or text…" value={q} onChange={(e) => setQ(e.target.value)} />
+      {shown.length === 0 && <div className="subtle">{q.trim() ? `No cards match “${q.trim()}”.` : 'No cards in hand.'}</div>}
+      <div className="card-grid">
+        {shown.map((guid) => (
+          <div key={guid} className="gcard">
+            <CardView pool={pool[guid]} />
+            <div className="gactions">
+              <button className="small" onClick={() => play(guid)}>battlefield</button>
+              <button className="small" onClick={() => actions.moveCard(guid, { zone: 'graveyard' })}>discard</button>
+              <button className="small" onClick={() => actions.moveCard(guid, { zone: 'exile' })}>exile</button>
+              <button className="small" onClick={() => actions.moveCard(guid, { zone: 'library', libPos: 'top' })}>library top</button>
+              <button className="small" onClick={() => actions.moveCard(guid, { zone: 'library', libPos: 'bottom' })}>library bottom</button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ textAlign: 'right' }}>
+        <button className="primary" onClick={onClose}>Close</button>
       </div>
     </Backdrop>
   );
@@ -1206,6 +1276,8 @@ export function ModalHost() {
       return <PeekModal count={modal.count} onClose={close} />;
     case 'search':
       return <SearchModal ownerId={modal.ownerId} onClose={close} />;
+    case 'hand':
+      return <HandModal ownerId={modal.ownerId} onClose={close} />;
     case 'zone':
       return <ZoneModal zone={modal.zone} zoneOwnerId={modal.zoneOwnerId} onClose={close} />;
     case 'card':

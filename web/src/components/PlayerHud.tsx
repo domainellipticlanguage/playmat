@@ -416,6 +416,8 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
   const [collapsed, setCollapsed] = useState(
     () => window.matchMedia('(max-width: 700px)').matches
   );
+  // Client-only too: fold a big revealed hand (20 cards!) down to one chip.
+  const [revealCollapsed, setRevealCollapsed] = useState(false);
 
   if (collapsed) {
     return (
@@ -564,7 +566,16 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
               })}
             </div>
           )}
-          {piles.revealed.length > 0 && (
+          {piles.revealed.length > 0 && revealCollapsed && (
+            <button
+              className="small revealed-collapsed"
+              onClick={() => setRevealCollapsed(false)}
+              title="Show the revealed cards"
+            >
+              ▸ {piles.revealed.length} revealed
+            </button>
+          )}
+          {piles.revealed.length > 0 && !revealCollapsed && (
             <div
               className={`revealed-strip${canActOnHand ? ' actionable' : ''}`}
               title={
@@ -573,6 +584,9 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
                   : 'Revealed from hand'
               }
             >
+              <button className="small rev-collapse" onClick={() => setRevealCollapsed(true)} title="Collapse the revealed cards">
+                ▾
+              </button>
               {piles.revealed.map((c) => {
                 const p = pool[c.guid];
                 return (
@@ -724,6 +738,12 @@ export function PlayerHud({ player }: { player: SeatRecord }) {
                 x: e.clientX,
                 y: e.clientY,
                 items: [
+                  ...(isMe || open
+                    ? [{ label: `Search ${isMe ? 'my' : `${player.name}'s`} hand…`, action: () => useUI.getState().openModal({ kind: 'hand', ownerId: pid }) }]
+                    : []),
+                  ...(piles.revealed.length > 0
+                    ? [{ label: revealCollapsed ? 'Expand revealed-hand preview' : 'Collapse revealed-hand preview', action: () => setRevealCollapsed((v) => !v) }]
+                    : []),
                   ...(isMe
                     ? []
                     : [{ label: `Peek at ${player.name}'s hand (only you see it)`, action: () => actions.peekHand(pid) }]),

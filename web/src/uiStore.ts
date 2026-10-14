@@ -16,6 +16,8 @@ export type ModalState =
   | { kind: 'peek'; count: number; mode: 'scry' | 'surveil' | 'peek' }
   /** Browse/search a library. Omit ownerId for your own. */
   | { kind: 'search'; ownerId?: string }
+  /** Browse/search a hand: mine, or one its owner opened to the table. */
+  | { kind: 'hand'; ownerId: string }
   | { kind: 'tokens'; at: { x: number; y: number } }
   | { kind: 'zone'; zone: 'graveyard' | 'exile' | 'command'; zoneOwnerId: string }
   /** Local-only look at one card (e.g. peeking a face-down card). */
